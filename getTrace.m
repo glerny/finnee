@@ -1,15 +1,15 @@
-function dataOut = getTrace(finneeStc, adress, varargin)
+function dataOut = getTrace(finneeStc, address, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 % GETTRACE is used to retrieve a trace (profile, MS spectra, ...) that has
 % been save in the  finneeStc. dataOut is the mxn array that contain all
 % data related to the specified trace.
 %
-% 2. PARAMETERS:
+% 2. INPUT PARAMETERS:
 %   . required. GETTRACE requires at least 2 parameters
 %       finneeStc
 %           is the finnee structure 
-%       adress
+%       address
 %           adress is the location of the index in the structure. the
 %           format should be: 'trace@dataset' 
 %       
@@ -22,6 +22,8 @@ function dataOut = getTrace(finneeStc, adress, varargin)
 %       'noFig'     
 %           Will not plot the trace
 %
+% 2. OUPUT PARAMETER
+%   
 % 3. EXAMPLES:
 %       dataOut = plotTrace(finneeStc, '3@1')
 %
