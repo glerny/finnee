@@ -5,78 +5,72 @@ function finneeStc = doCentroid (finneeStc, dataset, varargin)
 % spectrum dataset from a profile spectrum dataset. With this function the
 % centroid spectrum are calculated using local maxima.
 %
-% 2. PARAMETERS:
+% 2. INPUT PARAMETERS
 %   .required. DOCENTROID requires at least 2 parameters
 %       finneeStc
 %           is the finnee structure that contain information about the run
-%           and link and indexation of the associated dat file. The
-%           strcuture should have been create by function such as
-%           MZML2STRUCT
+%           and link and indexation of the associated dat file. 
 %       dataset
-%           datasetis the indice to the targeted dataset (i.e. in
+%           dataset is the indice to the targeted dataset (i.e. in
 %           finneeStc.dataset{m}, where m is the target dataset). The
-%           dataset can be a 'centroid spectrum' a 'profile spectrum' or a
-%           'ionic profile' dataset
+%           dataset sould be in a 'profile spectrum' format
 %
 %   .optionals. VARARGIN describes the optional paramters.
-%       'Method' followed my the name of the centroid method
+%       'method' followed my the name of the centroid method
 %           gle1' : default method 
-%                   find limits via local minima and maxima
-%                   the peak picking algorithms and output can be fund at
-%                   /subfunction/peakPickingMS_gle1.m
-%       'Tmin:Tmax'
-%           Not implemented yet
-%       'MZmin:MZmax'
-%           Not implemented yet
+%                   find  maxima. The peak picking algorithms and output
+%                   can be fund at peakPickingMS_gle1.m
 %
-% 3. EXAMPLES:
+% 3. OUTPUT PARAMETERS
+%   .finneeStc 
+%       Target Finnee structure 
 %
+% 4. EXAMPLES
+%    finneeStc = doCentroid(finneeStc);
 %
-% 4. COPYRIGHT
-% Copyright 2014-2015 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
+% 5. COPYRIGHT
+% Copyright 2015-2016 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
 %
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-disp('hello')
-info.functionName = 'doCentroid';
-info.description{1} = 'do a ''centroid spectroid'' dataset from a  ''profile spectrum'' dataset';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '13/07/2015_gle01';
-info.ownerContact = 'guillaume@fe.up.pt';
+info.function.functionName = 'doCentroid';
+info.function.description{1} = 'do a ''centroid spectrum'' dataset from a  ''profile spectrum'' dataset';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '14/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
 [parameters, options] = ...
     initFunction(nargin,  finneeStc, dataset, varargin );
 %INITFUNCTION used to verify the entries and load the optional and
 % compulsory parameters
 
 m = parameters.dataset;
-finneeStc.dataset{end+1} = finneeStc.dataset{m};
-if isfield(finneeStc.dataset{end}, 'trace')
-    finneeStc.dataset{end} = rmfield(finneeStc.dataset{end}, 'trace');
-end
-finneeStc.dataset{end}.infoFunctionUsed.parameters.decimals = ...
-    parameters.decimals;
+finneeStc.dataset{end+1}.name = ...
+    ['''centroid spectrum'' dataset of the ''profile spectrum'' dataset ', ...
+    num2str(m)];
+finneeStc.dataset{end}.dateOfCreation = datetime;
+finneeStc.dataset{end}.info = info;
+finneeStc.dataset{end}.info.parameters = parameters;
+finneeStc.dataset{end}.info.errors = {};
 
 [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);
 axeX = []; TICP = [];  BPP = []; mzBPP = []; MSIndex = [];
 datasetType = 'centroid spectrum';
 
-fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'a+b');
+fidReadDat = fopen(finneeStc.path2dat, 'a+b');
 % 2. CHECKING THE DATA TYPE
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
         % 3. GETTING EACH SCAN
         
-        index = finneeStc.dataset{m}.description.axe;
-        fseek(fidReadDat, index(1), 'bof');
-        axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+        axeX = finneeStc.dataset{m}.axes.time.values;
         indTimeStt = findCloser(parameters.xMin, axeX);
         indTimeEnd = findCloser(parameters.xMax, axeX);
         
         for ii = indTimeStt:indTimeEnd
             disp(['processing scan ', num2str(ii), ' out of ',...
                 num2str(length(axeX)), ' scans'])
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
@@ -120,8 +114,6 @@ switch finneeStc.dataset{m}.description.dataFormat
                
             end
         end
-        warning('on')
-        
         save2struc()
         fclose(fidReadDat);
     otherwise
@@ -129,16 +121,20 @@ switch finneeStc.dataset{m}.description.dataFormat
         error('dataset should be ''profile spectrum'' dataset')
 end
 
-save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-    [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
+save(fullfile(finneeStc.info.parameters.folderOut, ...
+    [finneeStc.info.parameters.fileID '.mat']), 'finneeStc')
 
 
 %% NESTED FUNCTIONS
 % 1. SAVE2STRUCT
 % save results to the finnee structure
     function save2struc()
-        finneeStc.dataset{end}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.infoFunctionUsed.parameters = parameters;
+        timeLabel = finneeStc.dataset{m}.axes.time.label;
+        timeUnit = finneeStc.dataset{m}.axes.time.unit;
+        mzLabel = finneeStc.dataset{m}.axes.mz.label;
+        mzUnit = finneeStc.dataset{m}.axes.mz.unit;
+        intLabel = finneeStc.dataset{m}.axes.intensity.label;
+        intUnit = finneeStc.dataset{m}.axes.intensity.unit;
         
         % 1.1. Save description of dataset
         finneeStc.dataset{end}.description.mzStart = mzMin;
@@ -148,81 +144,67 @@ save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
         finneeStc.dataset{end}.description.timeStart = axeX(indTimeStt);
         finneeStc.dataset{end}.description.timeEnd = axeX(indTimeEnd);
         finneeStc.dataset{end}.description.dataFormat = datasetType;
-        finneeStc.dataset{end}.description.index2DotDat = MSIndex;
+        finneeStc.dataset{end}.indexInDat = MSIndex;
         
-        % Record axeX in the *dat* file the rest in the *tra* file
-        fseek(fidReadDat, 0, 'eof');
-        finneeStc.dataset{end}.description.axe = [ftell(fidReadDat), 0, 1];
-        axeX = axeX(indTimeStt:indTimeEnd);
-        fwrite(fidReadDat, axeX, 'double');
-        finneeStc.dataset{end}.description.axe(2) = ftell(fidReadDat);
+        finneeStc.dataset{end}.axes.time.values = axeX;
+        finneeStc.dataset{end}.axes.time.label = timeLabel;
+        finneeStc.dataset{end}.axes.time.unit = timeUnit;
+        finneeStc.dataset{end}.axes.mz.values = [];
+        finneeStc.dataset{end}.axes.mz.label = mzLabel;
+        finneeStc.dataset{end}.axes.mz.unit = mzUnit;
+        finneeStc.dataset{end}.axes.intensity.values = [];
+        finneeStc.dataset{end}.axes.intensity.label = intLabel;
+        finneeStc.dataset{end}.axes.intensity.unit = intUnit;
         
         % 1.2. Record profiles
-        fseek(fidReadDat, 0, 'eof');
-        
         % ** TICP
-        finneeStc.dataset{end}.trace{1}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{1}.infoFunctionUsed.parameters = parameters;
-        finneeStc.dataset{end}.trace{1}.description.name = ...
+        finneeStc.dataset{end}.trace{1}.name = ...
             ['Total Ion Current Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{1}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{1}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{1}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{1}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{1}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{1}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{1}.index2DotDat = ...
-            [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX TICP'], 'double');
-        finneeStc.dataset{end}.trace{1}.index2DotDat(2) = ftell(fidReadDat);
+        finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'TIP';
+        finneeStc.dataset{end}.trace{1}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{1}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{1}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{1}.axeY.label = intLabel;
+        finneeStc.dataset{end}.trace{1}.axeY.unit = intUnit;
+        finneeStc.dataset{end}.trace{1}.indexInDat  = [ftell(fidReadDat), 0, 2];
+        fwrite(fidReadDat, [axeX TICP], 'double');
+        finneeStc.dataset{end}.trace{1}.indexInDat(2) = ftell(fidReadDat);
         
         % ** BPP
-        finneeStc.dataset{end}.trace{2}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{2}.infoFunctionUsed.parameters = parameters;
-        finneeStc.dataset{end}.trace{2}.description.name = ...
+        finneeStc.dataset{end}.trace{2}.name = ...
             ['Base Peak Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{2}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{2}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{2}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{2}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{2}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{2}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{2}.index2DotDat = ...
-            [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX BPP'], 'double');
-        finneeStc.dataset{end}.trace{2}.index2DotDat(2) = ftell(fidReadDat);
+        finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'BPP';
+        finneeStc.dataset{end}.trace{2}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{2}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{2}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{2}.axeY.label = intLabel;
+        finneeStc.dataset{end}.trace{2}.axeY.unit = intUnit;
+        finneeStc.dataset{end}.trace{2}.indexInDat  = [ftell(fidReadDat), 0, 2];
+        fwrite(fidReadDat, [axeX BPP], 'double');
+        finneeStc.dataset{end}.trace{2}.indexInDat(2) = ftell(fidReadDat);
         
         % ** mzBPP
-        finneeStc.dataset{end}.trace{3}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{3}.infoFunctionUsed.parameters = parameters;
-        finneeStc.dataset{end}.trace{3}.description.name = ...
+        finneeStc.dataset{end}.trace{3}.name = ...
             ['m/z @ Base Peak (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{3}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{3}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{3}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{3}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{3}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{3}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{3}.index2DotDat = ...
-            [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX mzBPP'], 'double');
-        finneeStc.dataset{end}.trace{3}.index2DotDat(2) = ftell(fidReadDat);
+        finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'mzBPP';
+        finneeStc.dataset{end}.trace{3}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{3}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{3}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{3}.axeY.label = mzLabel;
+        finneeStc.dataset{end}.trace{3}.axeY.unit = mzUnit;
+        finneeStc.dataset{end}.trace{3}.indexInDat  = [ftell(fidReadDat), 0, 2];
+        fwrite(fidReadDat, [axeX mzBPP], 'double');
+        finneeStc.dataset{end}.trace{3}.indexInDat(2) = ftell(fidReadDat);
     end
+
+
+
 end
 
 
@@ -254,7 +236,6 @@ parameters.xMax = inf;
 options.text = 1;
 options.save = 1;
 parameters.dataset = dataset;
-parameters.decimals = 5;
 parameters.method = 'gle1';
 
 % 2. Check for option
@@ -263,7 +244,7 @@ if  narginIn > 2
     length(vararginIn)
     while SFi <= length(vararginIn)
         switch vararginIn{SFi}
-            case 'Method'
+            case 'method'
                 parameters.method = vararginIn{SFi+1};
                 SFi = SFi +2;
             otherwise
