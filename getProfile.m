@@ -24,53 +24,41 @@ function [profileOut, finneeStc] = getProfile(finneeStc, dataset, massInt, varar
 %           (closest m/z value) or a 2x1 array [mzMin mzMax]
 %
 %   .optionals. VARARGIN describes the optional paramters.  
+%       'timeInt' follow by a 2x1 array
+%           Allow to only take the data points with m/z are within the
+%           defined interval
 %       'noFig' 
-%           Allow to avoid displaying the resulting figure
-%       'save2str'  
-%           Will add the results in the list of trace associated with the 
-%           dataset
-%       'fid' followed by a file identifier
-%           The file identifier shoud be related to the dat file, i.e.:
-%           fid= fopen(finneeStc.dataset{m}.description.path2DatFile, 'br');
-%           This function is to be used if GETSPECTRA is inside a loop to
-%           avoid always openind and closing the dat file.
-%       'sum' default
-%           The profile is calculated using the sum of the intensity of the
-%           points between the defined interval
-%       'max'
-%           The profile is calculated using the maximum intensity of the
-%           points between the defined interval
+%           No figures displayed
+%       'indice'  
+%           Work only with 'profile spectrum' dataset. If indice is used,
+%           massInt is the indice in the mass axe.
 %
 % 3. EXAMPLES:
-%       spectraOut = getProfile(finneeStc, 1, [500.23 500.25])
+%       spectraOut = getProfile(finneeStc, 1, [500.23 500.25], 'timeInt', {5 10])
 %
 % 4. COPYRIGHT
-% Copyright 2014-2015 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
+% Copyright 2015-2016 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'getProfile';
-info.description{1} = 'get the profile between a m/z interval';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '03/07/2015_gle01';
-info.ownerContact = 'guillaume@fe.up,pt';
+info.function.functionName =  'getProfile';
+info.function.description{1} =  'get the profile between a m/z interval';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '14/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
 [parameters, options] = ...
     initFunction(nargin, finneeStc, dataset, massInt, varargin );
 %INITFUNCTION used to verify the entries and load the optional and
 % complusory parameters
 
 m = parameters.dataset;
-if options.fid.in
-    fidReadDat =  options.fid.fid;
-else
-    fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-end
+fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
-index = finneeStc.dataset{m}.description.axe;
-fseek(fidReadDat, index(1), 'bof');
-axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-profileOut = axeX;
-profileOut(:,2) = 0;
+%% FUNCTION CORE
+
+axeX = finneeStc.dataset{m}.axes.time.values;
+profileOut.data = axeX;
+profileOut.data(:,2) = 0;
         
 % 1. Checking the data type
 switch finneeStc.dataset{m}.description.dataFormat
