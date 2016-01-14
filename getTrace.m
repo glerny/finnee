@@ -1,4 +1,4 @@
-function dataOut = getTrace(finneeStc, address, varargin)
+function traceOut = getTrace(finneeStc, address, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 % GETTRACE is used to retrieve a trace (profile, MS spectra, ...) that has
@@ -10,20 +10,17 @@ function dataOut = getTrace(finneeStc, address, varargin)
 %       finneeStc
 %           is the finnee structure 
 %       address
-%           adress is the location of the index in the structure. the
+%           address is the location of the index in the structure. the
 %           format should be: 'trace@dataset' 
 %       
 %   .optionals. VARARGIN describes the optional paramters.
-%       'newFig'    
-%           default parameter. Plot the trace in a new figure
-%       'inFig' followed by an handle, 
-%           will add the figure to an existing figure with the 
-%           corresponding handle.
 %       'noFig'     
 %           Will not plot the trace
 %
-% 2. OUPUT PARAMETER
-%   
+% 3. OUPUT PARAMETER
+%   traceOut is a strcuture that will contain the data (x and y) as
+%   well as the units, labels and title.
+%
 % 3. EXAMPLES:
 %       dataOut = plotTrace(finneeStc, '3@1')
 %
@@ -32,53 +29,47 @@ function dataOut = getTrace(finneeStc, address, varargin)
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'getTrace';
-info.description{1} = 'get the trace recorded in finneeStc';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '03/07/2015_gle01';
-info.ownerContact = 'guillaume@fe.up,pt';
+info.function.functionName = 'getTrace';
+info.function.description{1} = 'get the trace recorded in finneeStc';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '14/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
 
-[parameters, options] = initFunction(nargin, finneeStc, adress, varargin );
+[parameters, options] = initFunction(nargin, finneeStc, address, varargin );
 %INITFUNCTION used to verify the entries and load the optional and
 % complusory parameters
 
 m = parameters.dataset;
 n = parameters.trace;
 
-fidReadTra = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-index = finneeStc.dataset{m}.trace{n}.index2DotDat;
+fidReadTra = fopen(finneeStc.path2dat, 'rb');
+index = finneeStc.dataset{m}.trace{n}.indexInDat;
 fseek(fidReadTra,  index(1), 'bof');
-dataOut = fread(fidReadTra, [(index(2)-index(1))/(8*index(3)) index(3)], 'double');
+traceOut.title = finneeStc.dataset{m}.trace{n}.name;
+traceOut.data = ...
+    fread(fidReadTra, [(index(2)-index(1))/(8*index(3)) index(3)], 'double');
+traceOut.plotType = finneeStc.dataset{m}.trace{n}.plotType;
+traceOut.axes.axeX = finneeStc.dataset{m}.trace{n}.axeX;
+traceOut.axes.axeY = finneeStc.dataset{m}.trace{n}.axeY;
 
-switch options.display.in
-    case 'noFig'
-        return
-    case 'newFig'
-    case 'inFig'
-        h = options.display.handle;
-end
-switch finneeStc.dataset{m}.trace{n}.description.plotType
-    case 'profile'
-        plot(dataOut(:,1), dataOut(:,2));
-        title(finneeStc.dataset{m}.trace{n}.description.name);
-        xlabel([finneeStc.dataset{m}.trace{n}.description.axeX.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeX.unit]);
-        ylabel([finneeStc.dataset{m}.trace{n}.description.axeY.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeY.unit]);
-    case 'stem'
-        stem(dataOut(:,1), dataOut(:,2), 'Marker', 'none');
-        title(finneeStc.dataset{m}.trace{n}.description.name);
-        xlabel([finneeStc.dataset{m}.trace{n}.description.axeX.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeX.unit]);
-        ylabel([finneeStc.dataset{m}.trace{n}.description.axeY.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeY.unit]);
-    case 'bar'
-        bar(dataOut(:,1), dataOut(:,2));
-        title(finneeStc.dataset{m}.trace{n}.description.name);
-        xlabel([finneeStc.dataset{m}.trace{n}.description.axeX.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeX.unit]);
-        ylabel([finneeStc.dataset{m}.trace{n}.description.axeY.label,...
-            ' / ',finneeStc.dataset{m}.trace{n}.description.axeY.unit]);
+if options.display
+    switch traceOut.plotType
+        case 'profile'
+            plot(traceOut.data(:,1), traceOut.data(:,2));
+            title(traceOut.title);
+            xlabel([traceOut.axes.axeX.label, ' / ', traceOut.axes.axeX.unit]);
+            ylabel([traceOut.axes.axeY.label, ' / ', traceOut.axes.axeY.unit]);
+        case 'stem'
+            stem(traceOut.data(:,1), traceOut.data(:,2), 'Marker', 'none');
+            title(traceOut.title);
+            xlabel([traceOut.axes.axeX.label, ' / ', traceOut.axes.axeX.unit]);
+            ylabel([traceOut.axes.axeY.label, ' / ', traceOut.axes.axeY.unit]);
+        case 'bar'
+            bar(traceOut.data(:,1), traceOut.data(:,2));
+            title(traceOut.title);
+            xlabel([traceOut.axes.axeX.label, ' / ', traceOut.axes.axeX.unit]);
+            ylabel([traceOut.axes.axeY.label, ' / ', traceOut.axes.axeY.unit]);
+    end
 end
 
 %% NESTED FUNCTIONS
@@ -87,17 +78,17 @@ end
 % 1. INITFUNCTION
 % Function that get the input argument and check for errors
 function [parameters, options] = ...
-    initFunction(narginIn, finneeStc, adress, vararginIn )
+    initFunction(narginIn, finneeStc, address, vararginIn )
 
-options.display.in = 'newFig';
+options.display = 1;
 % 1.1. Check for obligatory parameters
 if narginIn < 2 % check the number of input parameters
     error('myApp:argChk', ...
         ['Wrong number of input arguments. \n', ...
         'Type help plotTrace for more information']);
-elseif ~ischar(adress)
+elseif ~ischar(address)
     error('myApp:argChk', ...
-        ['ADRESS shoud be a string. \n', ...
+        ['address shoud be a string. \n', ...
         'Type help MSdata2struct for more information']);
 elseif ~isstruct(finneeStc)
     error('myApp:argChk', ...
@@ -111,15 +102,8 @@ if  narginIn > 2
     length(vararginIn)
     while SFi <= length(vararginIn)
         switch vararginIn{SFi}
-            case 'newFig'
-                options.display.in = 'newFig';
-                SFi = SFi + 1;
-            case 'inFig'
-                options.display.in = 'inFig';
-                options.display.handle = vararginIn{SFi+1};
-                SFi = SFi +2;
             case 'noFig'
-                options.display.in = 'noFig';
+                options.display = 0;
                 SFi = SFi + 1;
             otherwise
                 error('myApp:argChk', ...
@@ -128,21 +112,21 @@ if  narginIn > 2
     end
 end
 
-% 1.3. Decifer adress and check for errors
-list = strsplit(adress, '@');
+% 1.3. Decifer address and check for errors
+list = strsplit(address, '@');
 tgtDataset = str2double(list{2});
 tgtTrace =  str2double(list{1});
 % check for error
 if isempty(tgtDataset)
      error('myApp:argChk', ...
-         [adress ' is not a recognized adress'])
+         [address ' is not a recognized address'])
 elseif tgtDataset > length(finneeStc.dataset)
     error('DIY')
 end
 
 if isempty(tgtTrace)
     error('myApp:argChk', ...
-        [adress ' is not a recognized adress'])
+        [address ' is not a recognized address'])
 elseif tgtTrace > length(finneeStc.dataset{tgtDataset}.trace)
              error('DIY')
 end

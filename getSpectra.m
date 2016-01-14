@@ -1,4 +1,4 @@
-function [spectraOut, finneeStc] = getSpectra(finneeStc, dataset, timeInt, varargin)
+function spectraOut = getSpectra(finneeStc, dataset, timeInt, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 % GETSPECTRA is used to retrieve scan from a dataset at a particular time
@@ -28,15 +28,10 @@ function [spectraOut, finneeStc] = getSpectra(finneeStc, dataset, timeInt, varar
 %           Allow to only take the data points with m/z are within the
 %           defined interval
 %       'noFig' 
-%           Allow to avoid displaying the resulting figure
-%       'save2str'  
-%           Will add the results in the list of trace associated with the 
-%           dataset
-%       'fid' followed by a file identifier
-%           The file identifier shoud be related to the dat file, i.e.:
-%           fid= fopen(finneeStc.dataset{m}.description.path2DatFile, 'br');
-%           This function is to be used if GETSPECTRA is inside a loop to
-%           avoid always openind and closing the dat file.
+%           No figures displayed
+%       'indice'  
+%           Work only with 'profile spectrum' and 'centroid spectrum'
+%           dataset. If indice is used, timeInt is the scan number.
 %
 % 3. EXAMPLES:
 %   spectraOut = getSpectra(finneeStc, 1, [10.1 10.5])
@@ -46,30 +41,23 @@ function [spectraOut, finneeStc] = getSpectra(finneeStc, dataset, timeInt, varar
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'getSpectra';
-info.description{1} = 'get the MS scan at a particular time or time interval';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '25/06/2015_gle01';
-info.ownerContact = 'guillaume@fe.up,pt';
-spectraOut = [];
+info.function.functionName =  'getSpectra';
+info.function.description{1} = 'get the MS scan at a particular time or time interval';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '14/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
 [parameters, options] = initFunction(nargin, finneeStc, dataset, timeInt, varargin );
 %INITFUNCTION used to verify the entries and load the optional and
 % compulsory parameters
 
+
+
 m = parameters.dataset;
-if options.openfile
-    fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-else
-    fidReadDat = options.fidReadDat;
-    if fidReadDat <= 0
-        fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-    end
-end
+fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
 %% FUNCTION CORE
-index = finneeStc.dataset{m}.description.axe;
-fseek(fidReadDat, index(1), 'bof');
-axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+
+axeX = finneeStc.dataset{m}.axes.time.values;
 if options.indice
     indTimeStt = parameters.xMin;
     indTimeEnd = parameters.xMax;
@@ -78,15 +66,19 @@ else
     indTimeEnd = findCloser(parameters.xMax, axeX);
 end
 
+spectraOut.title = ['MS spectra from ', num2str(axeX(indTimeStt)), ...
+    ' to ', num2str(axeX(indTimeEnd)), ' ', ...
+    finneeStc.dataset{m}.axes.time.unit];
+spectraOut.data = [];
 
 % 1. Checking the data type
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
-        plotType = 'profile';
+        spectraOut.plotType = 'profile';
         
         %2.1 getting MS spectra within the interval indTimeStt:indTimeEnd
         for ii = indTimeStt:indTimeEnd
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
@@ -94,10 +86,10 @@ switch finneeStc.dataset{m}.description.dataFormat
                 MS(:,1) > parameters.mzMax;
             MS(ind2rem, :) = [];
             
-            if isempty(spectraOut)
-                spectraOut = MS;
+            if isempty(spectraOut.data)
+                spectraOut.data  = MS;
             else
-                spectraOut(:,2) = spectraOut(:,2) + MS(:,2);
+                spectraOut.data (:,2) = spectraOut.data(:,2) + MS(:,2);
                 % NOTE: We assumed that the m/z axes in the same for all
                 % scan this is not entirely true as there are some small
                 % variation in the m/z values those seems small enough to
@@ -106,65 +98,41 @@ switch finneeStc.dataset{m}.description.dataFormat
         end
         
     case 'centroid spectrum'
-        plotType = 'stem';        
+        spectraOut.plotType = 'stem';
         
-        %2.2 getting MS spectra within the interval indTimeStt:indTimeEnd
+        % 2.2 getting MS spectra within the interval indTimeStt:indTimeEnd
         for ii = indTimeStt:indTimeEnd
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
             % !Provisory solution to deal with different type of centroid
             % data
-            typeCtr = length(MS(1,:));
-            switch typeCtr
-                case 2
-                    ctrMaker = 'CompassXport';
-                    ind2rem = MS(:,1) < parameters.mzMin |...
-                        MS(:,1) > parameters.mzMax;
-                    MS(ind2rem, :) = [];
-                    if isempty(spectraOut)
-                        spectraOut = MS;
-                    else
-                        [newSpectra, ~, ic] =...
-                            unique([spectraOut(:,1); MS(:,1)]);
-                        newSpectra(:,2) = 0;
-                        fromMSSpectra = ic(1:length(spectraOut(:,1)));
-                        fromMS = ic(length(spectraOut(:,1))+1:end);
-                        newSpectra(fromMSSpectra,2) = ...
-                            newSpectra(fromMSSpectra,2) + spectraOut(:,2);
-                        newSpectra(fromMS,2) = ...
-                            newSpectra(fromMS,2) + MS(:,2);
-                        spectraOut = newSpectra;
-                    end
-                case 10
-                    ctrMaker = 'gle1';
-                    MS = [MS(:,7), MS(:,3)];
-                    ind2rem = MS(:,1) < parameters.mzMin |...
-                        MS(:,1) > parameters.mzMax;
-                    MS(ind2rem, :) = [];
-                    if isempty(spectraOut)
-                        spectraOut = MS;
-                    else
-                        [newSpectra, ~, ic] =...
-                            unique([spectraOut(:,1); MS(:,1)]);
-                        newSpectra(:,2) = 0;
-                        fromMSSpectra = ic(1:length(spectraOut(:,1)));
-                        fromMS = ic(length(spectraOut(:,1))+1:end);
-                        newSpectra(fromMSSpectra,2) = ...
-                            newSpectra(fromMSSpectra,2) + spectraOut(:,2);
-                        newSpectra(fromMS,2) = ...
-                            newSpectra(fromMS,2) + MS(:,2);
-                        spectraOut = newSpectra;
-                    end
+            
+            ind2rem = MS(:,1) < parameters.mzMin |...
+                MS(:,1) > parameters.mzMax;
+            MS(ind2rem, :) = [];
+            if isempty(spectraOut.data)
+                spectraOut.data = MS;
+            else
+                [newSpectra, ~, ic] =...
+                    unique([spectraOut.data(:,1); MS(:,1)]);
+                newSpectra(:,2) = 0;
+                fromMSSpectra = ic(1:length(spectraOut.data(:,1)));
+                fromMS = ic(length(spectraOut.data(:,1))+1:end);
+                newSpectra(fromMSSpectra,2) = ...
+                    newSpectra(fromMSSpectra,2) + spectraOut.data(:,2);
+                newSpectra(fromMS,2) = ...
+                    newSpectra(fromMS,2) + MS(:,2);
+                spectraOut.data = newSpectra;
             end
         end
     case 'ionic profile'
-        plotType = 'stem';
+        spectraOut.plotType = 'stem';
         
         %2.3 getting each PIP
         for ii = 1:length(finneeStc.dataset{m}.description.index2DotDat(:,1))
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
                 index(3)], 'double');
@@ -183,19 +151,19 @@ switch finneeStc.dataset{m}.description.dataFormat
                     MS = newMS;
                 end
                 
-                if isempty(spectraOut)
-                    spectraOut = MS;
+                if isempty(spectraOut.data)
+                    spectraOut.data = MS;
                 else
                     [newSpectra, ~, ic] =...
-                        unique([spectraOut(:,1); MS(:,1)]);
+                        unique([spectraOut.data(:,1); MS(:,1)]);
                     newSpectra(:,2) = 0;
-                    fromMSSpectra = ic(1:length(spectraOut(:,1)));
-                    fromMS = ic(length(spectraOut(:,1))+1:end);
+                    fromMSSpectra = ic(1:length(spectraOut.data(:,1)));
+                    fromMS = ic(length(spectraOut.data(:,1))+1:end);
                     newSpectra(fromMSSpectra,2) = ...
-                        newSpectra(fromMSSpectra,2) + spectraOut(:,2);
+                        newSpectra(fromMSSpectra,2) + spectraOut.data(:,2);
                     newSpectra(fromMS,2) = ...
                         newSpectra(fromMS,2) + MS(:,2);
-                    spectraOut = newSpectra;
+                    spectraOut.data = newSpectra;
                 end
             end
         end
@@ -204,52 +172,31 @@ switch finneeStc.dataset{m}.description.dataFormat
 end
 fclose(fidReadDat);
 
-% 3. Plot and save if requested
+spectraOut.axes.axeX.label = finneeStc.dataset{m}.axes.mz.label;
+spectraOut.axes.axeX.unit = finneeStc.dataset{m}.axes.mz.unit;
+spectraOut.axes.axeY.label = finneeStc.dataset{m}.axes.intensity.label;
+spectraOut.axes.axeY.unit = finneeStc.dataset{m}.axes.intensity.unit;
+% 3. Plot if requested
 if options.display
-    if ~isempty(spectraOut)
-    strName = ['MS spectra from ', num2str(parameters.xMin), ' to ', ...
-        num2str(parameters.xMax), ' ', ...
-        finneeStc.dataset{m}.description.timeUnit];
-    switch plotType
+    switch spectraOut.plotType
         case 'profile'
-            plot(spectraOut(:,1), spectraOut(:,2));
+            plot(spectraOut.data(:,1), spectraOut.data(:,2));
+            title(spectraOut.title);
+            xlabel([spectraOut.axes.axeX.label, ' / ', spectraOut.axes.axeX.unit]);
+            ylabel([spectraOut.axes.axeY.label, ' / ', spectraOut.axes.axeY.unit]);
         case 'stem'
-            stem(spectraOut(:,1), spectraOut(:,2), 'Marker', 'none');
-        case 'barPlot'
-            bar(spectraOut(:,1), spectraOut.traceOut(:,2), 1);  
-    end
-    title(strName);
-    xlabel([finneeStc.dataset{m}.description.mzLabel,' / ',...
-        finneeStc.dataset{m}.description.mzUnit]);
-    ylabel([finneeStc.dataset{m}.description.intLabel, ' / ',...
-        finneeStc.dataset{m}.description.intUnit]);
+            stem(spectraOut.data(:,1), spectraOut.data(:,2), 'Marker', 'none');
+            title(spectraOut.title);
+            xlabel([spectraOut.axes.axeX.label, ' / ', spectraOut.axes.axeX.unit]);
+            ylabel([spectraOut.axes.axeY.label, ' / ', spectraOut.axes.axeY.unit]);
+        case 'bar'
+            bar(spectraOut.data(:,1), spectraOut.data(:,2));
+            title(spectraOut.title);
+            xlabel([spectraOut.axes.axeX.label, ' / ', spectraOut.axes.axeX.unit]);
+            ylabel([spectraOut.axes.axeY.label, ' / ', spectraOut.axes.axeY.unit]);
     end
 end
 
-if options.save2str
-    finneeStc.dataset{m}.trace{end+1}.infoFunctionUsed.info = info;
-    finneeStc.dataset{m}.trace{end}.infoFunctionUsed.parameters = parameters;
-    finneeStc.dataset{m}.trace{end}.description.name = strName;
-    finneeStc.dataset{m}.trace{end}.description.dateOfCreation = clock;
-    finneeStc.dataset{m}.trace{end}.description.plotType = plotType;
-    finneeStc.dataset{m}.trace{end}.description.axeX.label = ...
-        finneeStc.dataset{m}.description.mzLabel;
-    finneeStc.dataset{m}.trace{end}.description.axeX.unit = ...
-        finneeStc.dataset{m}.description.mzUnit;
-    finneeStc.dataset{m}.trace{end}.description.axeY.label = ...
-        finneeStc.dataset{m}.description.intLabel;
-    finneeStc.dataset{m}.trace{end}.description.axeY.unit = ...
-        finneeStc.dataset{m}.description.intUnit;
-    fidWriteTra = fopen( finneeStc.dataset{m}.description.path2DatFile, 'ab');
-    fseek(fidWriteTra, 0,'eof');
-    finneeStc.dataset{m}.trace{end}.index2DotDat  = ...
-        [ftell(fidWriteTra), 0, 2];
-    fwrite(fidWriteTra, [spectraOut(:,1) spectraOut(:,2)], 'double');
-    finneeStc.dataset{m}.trace{end}.index2DotDat(2) = ftell(fidWriteTra);
-    fclose(fidWriteTra);
-    save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-        [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
-end
 
 %% NESTED FUNCTIONS
 end
@@ -261,8 +208,6 @@ function [parameters, options] = ...
     initFunction(narginIn, finneeStc, dataset, timeInt, vararginIn )
 
 options.display = 1;
-options.save2str = 0;
-options.openfile = 1;
 options.indice = 0;
 
 % 1.1. Check for obligatory parameters
@@ -309,13 +254,6 @@ if  narginIn > 3
             case 'noFig'
                 options.display = 0;
                 SFi = SFi + 1;
-            case 'save2str'
-                options.save2str = 1;
-                SFi = SFi + 1;
-            case 'fid'
-                options.openfile = 0;
-                options.fidReadDat = vararginIn{SFi+1};
-                SFi = SFi + 2;
             case 'indice'
                 options.indice = 1;
                 SFi = SFi + 1;
