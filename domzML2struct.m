@@ -1,120 +1,67 @@
 function finneeStc = domzML2struct(varargin)
 %% DESCRIPTION 
-% 1. Introduction
-% DOMZML2STRUCT transforms a mzML file to a a matlab structure and an associated data file. This function has been
-% specifically design to handle datasets obtained using separation techniques
-% hyphenated with high resolution mass spectrometers. Before using DOMZML2STRUCT the raw datafile need to be converted to mzML [1]. The mzML format is a
-% markup text language supported by the human proteome organization [2]
-%  that promote a standardized format for mass spectrometry data. Conversion of a
-% raw dataset to mzML file can be made via freeware such as msConvert from
-% ProteoWizard [3] or by tools made available by the instruments
-% manufacturers [4]. DOMZML2STRUCT is suitable for profiles and centroid spectrum datasets.
+% For detail information and tutorials, go to
+% https://finneeblog.wordpress.com/. This work is still in progress and is
+% not bug free. For questions, help, suggestions or proposition of
+% collaboration please contact me via finneeblog or by email
+% (guillaume@fe.up,pt).
 %
-% 2. Usage
-% *finneeStc* is a Matlab(R) structure used to record all
-% information link to a specific dataset. This structure has been design in
-% order to store original information and to allow additional
-% transformations *finneeStc* contain multiple fields organised in
-% substructures. The initial level will contain at least three main
-% substructures:
+% 1. INTRODUCTION 
+% DOMZML2STRUCT transforms a mzML file to a a matlab
+% structure and an associated data file. This function has been design to
+% handle large datasets obtained using separation techniques hyphenated
+% with high resolution mass spectrometers. Before using DOMZML2STRUCT the
+% original proprietary file need to be converted to the mzML format.
+% DOMZML2STRUCT is suitable for profiles and centroid spectrum datasets.
 %
-% * *_finneeStc.infoFunctionUsed_* This is the substructure used to record
-% information about the function used to convert the mzML files to the
-% Matlab(R) structure
-% * *_finneeStc.infoRun_* This is the substructure used to record all the
-% information contained in the mzML file up to the mzML tag '<run>'. This substructure copy the mzML format to allow for easy conversion.
-% * *_finneeStc.dataset{n}_* are the substructures were  the various scans are
-% indexed. a finneeStc can contain multiple datasets, for exemple a
-% dataset containing the profile spectra, one containing the centroid
-% spectra and one containing the ionic profiles. Those substructures are
-% divided in three substructures.
+% 2. INPUT PARAMETERS
+%   .required
+%       None, the input file, destination files and folder are selected
+%       within the function
 %
-% * *_finneeStc.dataset{n}.infoFunctionUsed_* contain the information about
-% the function used to obtain this dataset.
-% * *_finneeStc.dataset{n}.description_*. This is the key structure to
-% retrieve each scans. Those are store in a secondary binary files with the
-% extension .dat. Fields in desciption are:
-%%
-%  path2DatFile_  : full address to the binary data file
-%  mzStart_       :
-%  mzEnd_         :
-%  intMin_        : 
-%  intMax_        : 
-%  timeStart_     : 
-%  timeEnd_       :
-%  dataFormat_    : 'centroid spectrum', 'profile spectrum' or 'ionic
-% profile'
-%  timeLabel_     : i.e. Time
-%  timeUnit_      : min
-%  mzLabel_       : 
-%  mzUnit_        :
-%  intLabel_      :
-%  intUnit_       :
-%  index2DotDat_  : this is a yx3 array where y is the number of scans
-% recorded during the run. This allow to obtain rapidly any recorded scans.
-% for example to obtain the 50th scans the code will be
-%%
-% 
-%   fileDat = finneeStc.dataset{1}.description.mzStart
-%   fidReadDat = fopen(fileDat, 'rb');
-%   index = finneeStc.dataset{1}.description.index2DotDat(50, :)
-%   fseek(fidReadDat, ind(1), 'bof');
-%   MSScan = fread(fidReadDat, [(ind(2)-ind(1))/(8*ind(1)) ind(3)], 'double');
-%   fclose(fidReadDat)
+%   .optional VARARGIN acepts the following values
+%       'tMin:Max'  followed by a 2x1 array (i.e. [5 10]) to set the  time 
+%           interval (default is (0 inf))
+%       'MZMin:Max' followed by a 2x1 array (i.e. [300 1000]) to set the MZ 
+%           interval (default is (0 inf))
+%       'dispOff'   remove all display text in the Matlab command window.
+%       'overwrite' Overwrite potentially existing files
+%       'precision' followed by an integer, number of decimal to used when
+%           displaying m/z values (default 4)
 %
-%%
-%  axe_ : 1x3 array with the sane rule as _index2DotDat_, allows to
-% recover the time axe.
-%%
-% * *_finneeStc.trace{m}_* are structures where every traces (i.e. any 2
-% dimensionals represenation such as chromatogram, MS spectra at a given
-% time or intervals,...) are recorded.
+% 3. OUTPUT PARAMETERS
+%   .finneeStc 
+%       is the structure that contain all information that was contain in
+%       the mzML file.
 %
-%% 
-% *3. Optional parameters.*
-%%
-% varagin is used to indicate optionals parameters. The following
-% parameters are recognized  
-%%
-%  'tMin:Max'  followed by a 2x1 array of integer to set the  time interval (default is (0 inf))
-%  'MZMin:Max' followed by a 2x1 array to set the MZ interval (default is (0 inf))
-%  'display'   followed by 'Off' remove all display text in the Matlab command window.
-%  'overwrite' Overwrite potentially existing files
+% 4.  EXAMPLES
+%   finneeStc = mzML2struct('tMin:Max', [5 25], 'dispOff', 'overwrite');
 %
-%%  EXAMPLES:
-%   finneeStc = mzML2struct('tMin:Max', [5 25], 'display', 'Off', 'overwrite');
-%
-%% REFERENCES
-% [1] 
-% [2] <http://www.psidev.info/mzml_1_0_0%20>
-% [3] <http://proteowizard.sourceforge.net/>
-% [4] <http://tools.proteomecenter.org/wiki/index.php?title=Formats:mzXML>
-
-%% ACKNOWLEDGEMENTS
-%% COPYRIGHT
-% Copyright 2014-2016 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
+% 5. COPYRIGHT
+% Copyright 2015-2016 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'MSdata2struct';
-info.description{1} = 'Main function';
-info.description{2} = 'Used to convert mzML datafiles to Matlab structures';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '25/06/2015_gle01';
-info.ownerContact = 'guillaume.erny@finnee.com';
-finneeStc.infoFunctionUsed.info = info;
-[finneeStc.infoFunctionUsed.parameters, options] = ...
-    initFunction(nargin, varargin);
-finneeStc.infoFunctionUsed.errors = {};
+info.function.functionName = 'domzML2struct';
+info.function.description{1} = 'Main function';
+info.function.description{2} = 'Used to convert mzML datafiles to Matlab structures';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '12/01/2016';
+info.function.ownerContact = 'guillaume.erny@finnee.com';
+finneeStc.info = info;
+
 % INITFUNCTION is used to test the entries, load the target MS dataset and
 % load the default values
+[finneeStc.info.parameters, options] = initFunction(nargin, varargin);
 
-originalFile = finneeStc.infoFunctionUsed.parameters.fileIn;
-fileID = finneeStc.infoFunctionUsed.parameters.fileID;
-folderOut = finneeStc.infoFunctionUsed.parameters.folderOut;
+finneeStc.info.errors = {};
+originalFile = finneeStc.info.parameters.fileIn;
+fileID = finneeStc.info.parameters.fileID;
+folderOut = finneeStc.info.parameters.folderOut;
+finneeStc.path2dat = fullfile(folderOut, [fileID, '.dat']);
 try
-    fidRead = fopen(originalFile, 'r'); % orifinal mzML file
-    fidWriteDat = fopen(fullfile(folderOut, [fileID, '.dat']), 'wb'); % new file that will receive the binary data
+    fidRead = fopen(originalFile, 'r'); % original mzML file
+    fidWriteDat = fopen(finneeStc.path2dat, 'wb'); % new file that will store data
 catch
     error('myApp:argChk', ...
         'Error while opening the files. Type help hyphMSdata2struct for more information')
@@ -130,14 +77,14 @@ curLine = fgetl(fidRead);
 [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 while ~strcmp(LDR.label, 'run')
     if strcmp(LDR.label, '?xml')
-        finneeStc.infoRun.xml.attributes = LDR.attributes;
-        finneeStc.infoRun.xml.text = LDR.text;
+        finneeStc.mzML.xml.attributes = LDR.attributes;
+        finneeStc.mzML.xml.text = LDR.text;
     elseif strcmp(LDR.label, 'mzML')
-        finneeStc.infoRun.mzML.attributes = LDR.attributes;
-        finneeStc.infoRun.mzML.text = LDR.text;
+        finneeStc.mzML.mzML.attributes = LDR.attributes;
+        finneeStc.mzML.mzML.text = LDR.text;
     else
         s = addChildNode(LDR);
-        finneeStc.infoRun.(LDR.label) = s.(LDR.label);
+        finneeStc.mzML.(LDR.label) = s.(LDR.label);
     end
     curLine = fgetl(fidRead);
     if ~ischar(curLine)
@@ -146,15 +93,10 @@ while ~strcmp(LDR.label, 'run')
     end
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 end
-finneeStc.infoRun.run.attributes = LDR.attributes;
-finneeStc.infoRun.run.text = LDR.text;
+finneeStc.mzML.run.attributes = LDR.attributes;
+finneeStc.mzML.run.text = LDR.text;
 
 % 3. CHECK FIRTH SCAN FOR MISSING INOFRMATION
-finneeStc.dataset{1}.infoFunctionUsed.info = info;
-finneeStc.dataset{1}.infoFunctionUsed.parameters = ...
-    finneeStc.infoFunctionUsed.parameters;
-errors = {};
-finneeStc.dataset{1}.infoFunctionUsed.errors = {};
 
 % Get dataset axesLabel and axesUnit by processing the first scan
 % Initialisation and default values
@@ -163,8 +105,7 @@ mzUnit = ''; intLabel = 'Intensity'; intUnit = '';
 [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);  
 axeX = []; TICP = [];  BPP = []; mzBPP = []; MSIndex = []; data2keep = [];
 compression = ''; dataFormat = ''; 
-decimals = finneeStc.dataset{1}.infoFunctionUsed.parameters.decimals;
-datasetType = finneeStc.infoRun.fileDescription.fileContent{1}.cvParam{2}.attributes{3}.field{1};
+datasetType = finneeStc.mzML.fileDescription.fileContent{1}.cvParam{2}.attributes{3}.field{1}; % recover datasettype (i.e. s centroid of profilerom mzML info)
 curLine = fgetl(fidRead);
 [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 if options.display
@@ -202,8 +143,8 @@ while ~strcmp(LDR.label, '/spectrum')
             end
         end
     elseif strcmp(LDR.label, 'binary')
-        if axeX(end) >= finneeStc.dataset{1}.infoFunctionUsed.parameters.xMin && ...
-                axeX(end) <= finneeStc.dataset{1}.infoFunctionUsed.parameters.xMax
+        if axeX(end) >= finneeStc.info.parameters.xMin && ...
+                axeX(end) <= finneeStc.info.parameters.xMax
             data2keep(end+1) = 1;
             input = LDR.text;
             switch dataFormat
@@ -218,34 +159,17 @@ while ~strcmp(LDR.label, '/spectrum')
                 otherwise
                     error('compression not recognized')
             end
-            output= typecast(uint8(output),'double');
+            output = typecast(uint8(output),'double');
             if boolArray
                 boolArray = 0;
                 mzValue = output;
             else
                 boolArray = 1;
                 intValue = output;
-                ind2rem = mzValue < finneeStc.dataset{1}.infoFunctionUsed.parameters.mzMin | ...
-                    mzValue > finneeStc.dataset{1}.infoFunctionUsed.parameters.mzMax;
+                ind2rem = mzValue < finneeStc.info.parameters.mzMin | ...
+                    mzValue > finneeStc.info.parameters.mzMax;
                 mzValue(ind2rem) = [];
                 intValue(ind2rem) = [];
-                if isnan(decimals) && strcmp(datasetType, 'centroid spectrum')
-                    answer = inputdlg('Enter the number of decimals to keep in the accurate mass', ...
-                        'decimals', 1, {'5'});
-                    if isempty(answer)
-                        error('myApp:argChk', 'User cancel')
-                    elseif isempty(answer{1})
-                        error('myApp:argChk', 'User cancel')
-                    elseif str2double(answer{1}) < 1
-                        error('myApp:argChk', 'invalid value for the number of decimals. Should be bigger or equal than 1')
-
-                    end
-                    decimals = round(str2double(answer{1}));
-                    finneeStc.dataset{1}.infoFunctionUsed.parameters.decimals = decimals;
-                end
-                if strcmp(datasetType, 'centroid spectrum')
-                    mzValue = round(mzValue*10^decimals)/10^decimals;
-                end
                 
                 % calculates profiles and limits
                 if mzMin > min(mzValue), mzMin = min(mzValue); end
@@ -275,7 +199,7 @@ while ~strcmp(LDR.label, '/spectrum')
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 end
 
-% 4. DO FOR EACH SCAN
+% 4. EXTRACT DATA FOR EACH SCAN
 while ~strcmp(LDR.label, '/run')
     if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
     if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
@@ -290,8 +214,8 @@ while ~strcmp(LDR.label, '/run')
         end
     end
     if strcmp(LDR.label, 'binary')
-        if axeX(end) >= finneeStc.dataset{1}.infoFunctionUsed.parameters.xMin && ...
-                axeX(end) <= finneeStc.dataset{1}.infoFunctionUsed.parameters.xMax
+        if axeX(end) >= finneeStc.info.parameters.xMin && ...
+                axeX(end) <= finneeStc.info.parameters.xMax
             data2keep(end+1) = 1;
             input = LDR.text;
             switch dataFormat
@@ -313,8 +237,8 @@ while ~strcmp(LDR.label, '/run')
             else
                 boolArray = 1;
                 intValue = output;
-                ind2rem = mzValue < finneeStc.dataset{1}.infoFunctionUsed.parameters.mzMin | ...
-                    mzValue > finneeStc.dataset{1}.infoFunctionUsed.parameters.mzMax;
+                ind2rem = mzValue < finneeStc.info.parameters.mzMin | ...
+                    mzValue > finneeStc.info.parameters.mzMax;
                 mzValue(ind2rem) = [];
                 intValue(ind2rem) = [];
                 if strcmp(datasetType, 'centroid spectrum')
@@ -350,11 +274,11 @@ end
 axeX(data2keep == 0) = [];
 fclose(fidRead);
 
-% 5. CONCLUSIONS
-finneeStc.dataset{1}.infoFunctionUsed.errors = errors;
+% 5. CONCLUSIONS AND DATA RECORDING
 save2struc()
-save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-    [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
+finneeStc.dataset{1}.info.errors = {};
+save(fullfile(finneeStc.info.parameters.folderOut, ...
+    [finneeStc.info.parameters.fileID '.mat']), 'finneeStc')
 fclose(fidWriteDat);
 
 %% SUB FUNCTIONS AND NESTED FUNCTIONS
@@ -387,7 +311,12 @@ fclose(fidWriteDat);
 % 2. NESTED-FUNCTION:  save2struc()
     function save2struc()
     % Save description of dataset
-    finneeStc.dataset{1}.description.path2DatFile = fullfile(folderOut, [fileID, '.dat']);
+    finneeStc.dataset{1}.name = 'Original dataset';
+    finneeStc.dataset{1}.dateOfCreation = datetime;
+    finneeStc.dataset{1}.info = info;
+    finneeStc.dataset{1}.info.parameters = ...
+        finneeStc.info.parameters;
+    finneeStc.dataset{1}.info.errors = {};
     finneeStc.dataset{1}.description.mzStart = mzMin;
     finneeStc.dataset{1}.description.mzEnd = mzMax;
     finneeStc.dataset{1}.description.intMin = intMin;
@@ -395,62 +324,58 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.description.timeStart = axeX(1);
     finneeStc.dataset{1}.description.timeEnd = axeX(length(axeX));
     finneeStc.dataset{1}.description.dataFormat = datasetType;
-    finneeStc.dataset{1}.description.index2DotDat = MSIndex;
-    
-    % Record axeX in the *dat* file the rest in the *tra* file
-    finneeStc.dataset{1}.description.axe(1) = ftell(fidWriteDat);
-    fwrite(fidWriteDat, axeX, 'double');
-    finneeStc.dataset{1}.description.axe(2) = ftell(fidWriteDat);
-    finneeStc.dataset{1}.description.axe(3) = 1;
-    finneeStc.dataset{1}.description.timeLabel = timeLabel;
-    finneeStc.dataset{1}.description.timeUnit = timeUnit;
-    finneeStc.dataset{1}.description.mzLabel = mzLabel;
-    finneeStc.dataset{1}.description.mzUnit = mzUnit;
-    finneeStc.dataset{1}.description.intLabel = intLabel;
-    finneeStc.dataset{1}.description.intUnit = intUnit;
+    finneeStc.dataset{1}.indexInDat = MSIndex;
+
+    finneeStc.dataset{1}.axes.time.values = axeX;
+    finneeStc.dataset{1}.axes.time.label = timeLabel;
+    finneeStc.dataset{1}.axes.time.unit = timeUnit;
+    finneeStc.dataset{1}.axes.mz.values = [];
+    finneeStc.dataset{1}.axes.mz.label = mzLabel;
+    finneeStc.dataset{1}.axes.mz.unit = mzUnit;
+    finneeStc.dataset{1}.axes.intensity.values = [];
+    finneeStc.dataset{1}.axes.intensity.label = intLabel;
+    finneeStc.dataset{1}.axes.intensity.unit = intUnit;
+   
     
     % Record profiles
     % ** TICP
-    finneeStc.dataset{1}.trace{1}.infoFunctionUsed.info = info;
-    finneeStc.dataset{1}.trace{1}.infoFunctionUsed.parameters = {};
-    finneeStc.dataset{1}.trace{1}.description.name = 'Total Ion Current Profile (dataset 1)';
-    finneeStc.dataset{1}.trace{1}.description.dateOfCreation = clock;
-    finneeStc.dataset{1}.trace{1}.description.plotType = 'profile';
-    finneeStc.dataset{1}.trace{1}.description.axeX.label = timeLabel;
-    finneeStc.dataset{1}.trace{1}.description.axeX.unit = timeUnit;
-    finneeStc.dataset{1}.trace{1}.description.axeY.label = intLabel;
-    finneeStc.dataset{1}.trace{1}.description.axeY.unit = intUnit;
-    finneeStc.dataset{1}.trace{1}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+    finneeStc.dataset{1}.trace{1}.name = 'Total Ion Current Profile (dataset 1)';
+    finneeStc.dataset{1}.trace{1}.dateOfCreation = datetime;
+    finneeStc.dataset{1}.trace{1}.code = 'TIP';
+    finneeStc.dataset{1}.trace{1}.plotType = 'profile';
+    finneeStc.dataset{1}.trace{1}.axeX.label = timeLabel;
+    finneeStc.dataset{1}.trace{1}.axeX.unit = timeUnit;
+    finneeStc.dataset{1}.trace{1}.axeY.label = intLabel;
+    finneeStc.dataset{1}.trace{1}.axeY.unit = intUnit;
+    finneeStc.dataset{1}.trace{1}.indexInDat  = [ftell(fidWriteDat), 0, 2];
     fwrite(fidWriteDat, [axeX TICP], 'double');
-    finneeStc.dataset{1}.trace{1}.index2DotDat(2) = ftell(fidWriteDat);
+    finneeStc.dataset{1}.trace{1}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** BPP
-    finneeStc.dataset{1}.trace{2}.infoFunctionUsed.info = info;
-    finneeStc.dataset{1}.trace{2}.infoFunctionUsed.parameters = {};
-    finneeStc.dataset{1}.trace{2}.description.name = 'Base Peak Profile (dataset 1)';
-    finneeStc.dataset{1}.trace{2}.description.dateOfCreation = clock;
-    finneeStc.dataset{1}.trace{2}.description.plotType = 'profile';
-    finneeStc.dataset{1}.trace{2}.description.axeX.label = timeLabel;
-    finneeStc.dataset{1}.trace{2}.description.axeX.unit = timeUnit;
-    finneeStc.dataset{1}.trace{2}.description.axeY.label = intLabel;
-    finneeStc.dataset{1}.trace{2}.description.axeY.unit = intUnit;
-    finneeStc.dataset{1}.trace{2}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+    finneeStc.dataset{1}.trace{2}.name = 'Base Peak Profile (dataset 1)';
+    finneeStc.dataset{1}.trace{2}.dateOfCreation = datetime;
+    finneeStc.dataset{1}.trace{1}.code = 'BPP';
+    finneeStc.dataset{1}.trace{2}.plotType = 'profile';
+    finneeStc.dataset{1}.trace{2}.axeX.label = timeLabel;
+    finneeStc.dataset{1}.trace{2}.axeX.unit = timeUnit;
+    finneeStc.dataset{1}.trace{2}.axeY.label = intLabel;
+    finneeStc.dataset{1}.trace{2}.axeY.unit = intUnit;
+    finneeStc.dataset{1}.trace{2}.indexInDat  = [ftell(fidWriteDat), 0, 2];
     fwrite(fidWriteDat, [axeX BPP], 'double');
-    finneeStc.dataset{1}.trace{2}.index2DotDat(2) = ftell(fidWriteDat);
+    finneeStc.dataset{1}.trace{2}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** mzBPP
-    finneeStc.dataset{1}.trace{3}.infoFunctionUsed.info = info;
-    finneeStc.dataset{1}.trace{3}.infoFunctionUsed.parameters = {};
-    finneeStc.dataset{1}.trace{3}.description.name = 'm/z @ Base Peak (dataset 1)';
-    finneeStc.dataset{1}.trace{3}.description.dateOfCreation = clock;
-    finneeStc.dataset{1}.trace{3}.description.plotType = 'profile';
-    finneeStc.dataset{1}.trace{3}.description.axeX.label = timeLabel;
-    finneeStc.dataset{1}.trace{3}.description.axeX.unit = timeUnit;
-    finneeStc.dataset{1}.trace{3}.description.axeY.label = mzLabel;
-    finneeStc.dataset{1}.trace{3}.description.axeY.unit = mzUnit;
-    finneeStc.dataset{1}.trace{3}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+    finneeStc.dataset{1}.trace{3}.name = 'm/z @ Base Peak (dataset 1)';
+    finneeStc.dataset{1}.trace{3}.dateOfCreation = datetime;
+    finneeStc.dataset{1}.trace{1}.code = 'mzBPP';
+    finneeStc.dataset{1}.trace{3}.plotType = 'profile';
+    finneeStc.dataset{1}.trace{3}.axeX.label = timeLabel;
+    finneeStc.dataset{1}.trace{3}.axeX.unit = timeUnit;
+    finneeStc.dataset{1}.trace{3}.axeY.label = mzLabel;
+    finneeStc.dataset{1}.trace{3}.axeY.unit = mzUnit;
+    finneeStc.dataset{1}.trace{3}.indexInDat  = [ftell(fidWriteDat), 0, 2];
     fwrite(fidWriteDat, [axeX mzBPP], 'double');
-    finneeStc.dataset{1}.trace{3}.index2DotDat(2) = ftell(fidWriteDat);
+    finneeStc.dataset{1}.trace{3}.indexInDat(2) = ftell(fidWriteDat);
     end
 end
 
@@ -472,7 +397,7 @@ parameters.xMin = 0;
 parameters.xMax = inf;
 parameters.mzMin = 0;
 parameters.mzMax = inf;
-parameters.decimals = nan;
+parameters.prec4mz = '%0.4f';
 options.display = 1;
 options.ifExist = 'Stop';
 
@@ -514,35 +439,16 @@ if  narginIn > 0
                              ['incorrect set values for ''MZMin:Max''',...
                              ' the following parameter should be a 2x1 array of numbers'])
                 end 
-            case 'display'
-                if strcmpi(vararginIn{SFi+1}, 'off')
-                    options.display = 0;
-                elseif strcmpi(vararginIn{SFi+1}, 'on')
-                    options.display = 1;
-                else
-                    error('myApp:argChk', ...
-                        ['incorrect argument for ''display''',...
-                        ' the following parameter should either be ''on'' or ''off'''])
-                end
-                SFi = SFi +2;
+            case 'dispOff'
+                options.display = 0;
+                SFi = SFi +1;
             case 'overwrite'
                 options.ifExist = 'Overwrite';
                 SFi = SFi + 1;
-            case 'decimals'
-                if isnumeric(vararginIn{SFi+1})
-                    if vararginIn{SFi+1} >= 1
-                        parameters.decimals = int32(vararginIn{SFi+1});
-                    else
-                        error('myApp:argChk', ...
-                            ['incorrect argument for ''decimals''',...
-                            ' the following paramters should be >= 1'])
-                    end
-                else
-                      error('myApp:argChk', ...
-                            ['incorrect argument for ''decimals''',...
-                            ' the following paramters should be numeric'])
-                end
-                SFi = SFi +1;
+            case 'precision'
+                parameters.prec4mz = ['%0.', ...
+                    num2str(vararginIn{SFi+1}(1), 0), 'f'];
+                SFi = SFi + 2;
             otherwise
                 error('myApp:argChk', ...
                     [vararginIn{SFi} ' is not a recognized PropertyName'])
