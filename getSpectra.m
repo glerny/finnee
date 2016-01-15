@@ -37,7 +37,7 @@ function spectraOut = getSpectra(finneeStc, dataset, timeInt, varargin)
 %   spectraOut = getSpectra(finneeStc, 1, [10.1 10.5])
 %
 % 4. COPYRIGHT
-% Copyright 2014-2015 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
+% Copyright 2015-2016 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
@@ -46,7 +46,8 @@ info.function.description{1} = 'get the MS scan at a particular time or time int
 info.function.matlabVersion = '8.5.0.197613 (R2015a)';
 info.function.version = '14/01/2016';
 info.function.ownerContact = 'guillaume@fe.up.pt';
-[parameters, options] = initFunction(nargin, finneeStc, dataset, timeInt, varargin );
+[parameters, options] = ...
+    initFunction(nargin, finneeStc, dataset, timeInt, varargin );
 %INITFUNCTION used to verify the entries and load the optional and
 % compulsory parameters
 
