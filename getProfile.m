@@ -24,9 +24,6 @@ function [profileOut, finneeStc] = getProfile(finneeStc, dataset, massInt, varar
 %           (closest m/z value) or a 2x1 array [mzMin mzMax]
 %
 %   .optionals. VARARGIN describes the optional paramters.  
-%       'timeInt' follow by a 2x1 array
-%           Allow to only take the data points with m/z are within the
-%           defined interval
 %       'noFig' 
 %           No figures displayed
 %       'indice'  
@@ -34,7 +31,7 @@ function [profileOut, finneeStc] = getProfile(finneeStc, dataset, massInt, varar
 %           massInt is the indice in the mass axe.
 %
 % 3. EXAMPLES:
-%       spectraOut = getProfile(finneeStc, 1, [500.23 500.25], 'timeInt', {5 10])
+%       spectraOut = getProfile(finneeStc, 1, [500.23 500.25])
 %
 % 4. COPYRIGHT
 % Copyright 2015-2016 G. Erny (guillaume@fe.up,pt), FEUP, Porto, Portugal
@@ -57,52 +54,79 @@ fidReadDat = fopen(finneeStc.path2dat, 'rb');
 %% FUNCTION CORE
 
 axeX = finneeStc.dataset{m}.axes.time.values;
-profileOut.data = axeX;
-profileOut.data(:,2) = 0;
+fmt = finneeStc.info.parameters.prec4mz;
         
 % 1. Checking the data type
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
-        plotType = 'profile';
         
-        %2.1. getting each MS spectra and caulcaulating the profile
+        %2.1. FInd limits
+        index = finneeStc.dataset{m}.indexInDat(1, :);
+        fseek(fidReadDat, index(1), 'bof');
+        MS = ...
+            fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+        if parameters.mzMin ~=  parameters.mzMax
+            if options.indice
+                indMzStt = parameters.mzMin;
+                indMzEnd = parameters.mzMax;
+            else
+                indMzStt = findCloser(parameters.mzMin, MS(:,1));
+                indMzEnd = findCloser(parameters.mzMax,  MS(:,1));
+            end
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str(MS(indMzStt, 1), fmt),':', ...
+                num2str(MS(indMzEnd, 1), fmt), '); (',...
+                'dataset ',  num2str(m), ')'];
+        else
+            if options.indice
+                ind = parameters.mzMin;
+            else
+                ind = findCloser( parameters.mzMin, MS(:,1));
+            end
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str(MS(ind, 1),fmt),'); (',...
+                'dataset ',  num2str(m), ')'];
+        end
+        profileOut.plotType = 'profile';
+        
+        profileOut.data = axeX';
+        profileOut.data(:,2) = 0;
+        %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
             if parameters.mzMin ~=  parameters.mzMax
-                ind2rem = MS(:,1) < parameters.mzMin |...
-                    MS(:,1) > parameters.mzMax;
-                MS(ind2rem, :) = [];
+                MS = MS(indMzStt:indMzEnd, :);
             else
-                if options.indice
-                    ind = parameters.mzMin;
-                else
-                    ind = findCloser( parameters.mzMin, MS(:,1));
-                end
                 MS = MS(ind, :);
             end
             if isempty(MS)
-                profileOut(ii, 2) = 0;
+                profileOut.data(ii, 2) = 0;
             else
-                switch parameters.calc
-                    case 'sum'
-                        profileOut(ii, 2) = sum(MS(:,2));
-                    case 'max'
-                        profileOut(ii, 2) = max(MS(:,2));
-                    case 'freq'
-                        profileOut(ii, 2) = length(MS(:,2));
-                end
+                profileOut.data(ii, 2) = sum(MS(:,2));
             end
         end
         
     case 'centroid spectrum'
-        plotType = 'profile';
+        if parameters.mzMin ~=  parameters.mzMax
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str( parameters.mzMin, fmt),':', ...
+                num2str(parameters.mzMax, fmt), '); (',...
+                'dataset ',  num2str(m), ')'];
+        else
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str(parameters.mzMin),'); (',...
+                'dataset ',  num2str(m), ')'];
+        end
+        profileOut.plotType = 'profile';
+        profileOut.data = axeX';
+        profileOut.data(:,2) = 0;
         
         %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
@@ -110,24 +134,29 @@ switch finneeStc.dataset{m}.description.dataFormat
                 MS(:,1) > parameters.mzMax;
             MS(ind2rem, :) = [];
             if isempty(MS)
-                profileOut(ii, 2) = 0;
+                profileOut.data(ii, 2) = 0;
             else
-                switch parameters.calc
-                    case 'sum'
-                        profileOut(ii, 2) = sum(MS(:,2));
-                    case 'max'
-                        profileOut(ii, 2) = max(MS(:,2));
-                    case 'freq'
-                        profileOut(ii, 2) = length(MS(:,2));
-                end
+                profileOut.data(ii, 2) = sum(MS(:,2));
             end
         end
     case 'ionic profile'
-         plotType = 'profile';
-         
+         profileOut.plotType = 'profile';
+         if parameters.mzMin ~=  parameters.mzMax
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str( parameters.mzMin, fmt),':', ...
+                num2str(parameters.mzMax, fmt), '); (',...
+                'dataset ',  num2str(m), ')'];
+        else
+            profileOut.title = ['Extracted ion profile ( m/z = ', ...
+                num2str(parameters.mzMin),'); (',...
+                'dataset ',  num2str(m), ')'];
+        end
+        
+        profileOut.data = axeX;
+        profileOut.data(:,2) = 0;
         %2.3 getting each PIP
-        for ii = 1:length(finneeStc.dataset{m}.description.index2DotDat(:,1))
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+        for ii = 1:length(finneeStc.dataset{m}.indexInDat(:,1))
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
                 index(3)], 'double');
@@ -135,73 +164,40 @@ switch finneeStc.dataset{m}.description.dataFormat
                 PIP(:,3) > parameters.mzMax;
             PIP(ind2rem, :) = [];
             if ~isempty(PIP)
-                switch parameters.calc
-                    case 'sum'
-                        profileOut(PIP(:,1),2) = ...
-                            profileOut(PIP(:,1),2) + PIP(:,2);
-                    case 'max'
-                        ind2keep = PIP(:,2) > profileOut(PIP(:,1),2);
-                        profileOut(PIP(ind2keep,1),2) = PIP(ind2keep,2);
-                    case 'freq'
-                        profileOut(PIP(:,1),2) = ...
-                            profileOut(PIP(:,1),2) + 1;
-                end
-                profileOut(PIP(:,1),2) = profileOut(PIP(:,1),2) + PIP(:,2);
+                profileOut.data(PIP(:,1),2) = profileOut.data(PIP(:,1),2) + PIP(:,2);
             end
         end
     otherwise
         DIL
 end
+fclose(fidReadDat);
 
-if options.fid.in
-else
-    fclose(fidReadDat);
-end
+profileOut.axes.axeX.label = finneeStc.dataset{m}.axes.time.label;
+profileOut.axes.axeX.unit = finneeStc.dataset{m}.axes.time.unit;
+profileOut.axes.axeY.label = finneeStc.dataset{m}.axes.intensity.label;
+profileOut.axes.axeY.unit = finneeStc.dataset{m}.axes.intensity.unit;
 
-
-% 3. Plot and save if requested
+% 3. Plot if requested
 if options.display
-    strName = ['Profile with m/z between ', num2str(parameters.mzMin), ' to ', ...
-        num2str(parameters.mzMax), ' (', parameters.calc, ')'];
-    switch plotType
+    switch profileOut.plotType
         case 'profile'
-            plot(profileOut(:,1), profileOut(:,2));
+            plot(profileOut.data(:,1), profileOut.data(:,2));
+            title(profileOut.title);
+            xlabel([profileOut.axes.axeX.label, ' / ', profileOut.axes.axeX.unit]);
+            ylabel([profileOut.axes.axeY.label, ' / ', profileOut.axes.axeY.unit]);
         case 'stem'
-            stem(profileOut(:,1), profileOut(:,2), 'Marker', 'none');
-        case 'barPlot'
-            bar(profileOut(:,1), profileOut(:,2), 1);
+            stem(profileOut.data(:,1), profileOut.data(:,2), 'Marker', 'none');
+            title(profileOut.title);
+            xlabel([profileOut.axes.axeX.label, ' / ', profileOut.axes.axeX.unit]);
+            ylabel([profileOut.axes.axeY.label, ' / ', profileOut.axes.axeY.unit]);
+        case 'bar'
+            bar(profileOut.data(:,1), profileOut.data(:,2));
+            title(profileOut.title);
+            xlabel([profileOut.axes.axeX.label, ' / ', profileOut.axes.axeX.unit]);
+            ylabel([profileOut.axes.axeY.label, ' / ', profileOut.axes.axeY.unit]);
     end
-    title(strName);
-    xlabel([finneeStc.dataset{m}.description.timeLabel,' / ',...
-        finneeStc.dataset{m}.description.timeUnit]);
-    ylabel([finneeStc.dataset{m}.description.intLabel, ' / ',...
-        finneeStc.dataset{m}.description.intUnit]);
 end
 
-if options.save2str
-    finneeStc.dataset{m}.trace{end+1}.infoFunctionUsed.info = info;
-    finneeStc.dataset{m}.trace{end}.infoFunctionUsed.parameters = parameters;
-    finneeStc.dataset{m}.trace{end}.description.name = strName;
-    finneeStc.dataset{m}.trace{end}.description.dateOfCreation = clock;
-    finneeStc.dataset{m}.trace{end}.description.plotType = plotType;
-    finneeStc.dataset{m}.trace{end}.description.axeX.label = ...
-        finneeStc.dataset{m}.description.timeLabel;
-    finneeStc.dataset{m}.trace{end}.description.axeX.unit = ...
-        finneeStc.dataset{m}.description.timeUnit;
-    finneeStc.dataset{m}.trace{end}.description.axeY.label = ...
-        finneeStc.dataset{m}.description.intLabel;
-    finneeStc.dataset{m}.trace{end}.description.axeY.unit = ...
-        finneeStc.dataset{m}.description.intUnit;
-    fidWriteTra = fopen( finneeStc.dataset{m}.description.path2DatFile, 'ab');
-    fseek(fidWriteTra, 0,'eof');
-    finneeStc.dataset{m}.trace{end}.index2DotDat  = ...
-        [ftell(fidWriteTra), 0, 2];
-    fwrite(fidWriteTra, [profileOut(:,1) profileOut(:,2)], 'double');
-    finneeStc.dataset{m}.trace{end}.index2DotDat(2) = ftell(fidWriteTra);
-    fclose(fidWriteTra);
-    save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-        [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
-end
 
 %% NESTED FUNCTIONS
 end
@@ -252,29 +248,9 @@ if  narginIn > 3
     SFi = 1;
     while SFi <= length(vararginIn)
         switch vararginIn{SFi}
-            case 'timeInt'
-                if length(vararginIn{SFi+1}) == 2
-                    timeInt = sort(vararginIn{SFi+1});
-                    parameters.xMin = timeInt(1);
-                    parameters.xMax = timeInt(2);
-                end
-                SFi = SFi + 2;
             case 'noFig'
                 options.display = 0;
                 SFi = SFi + 1;
-            case 'save2str'
-                options.save2str = 1;
-                SFi = SFi + 1;
-            case 'sum'
-                parameters.calc = 'sum';
-                SFi = SFi + 1;
-            case 'max'
-                parameters.calc = 'max';
-                SFi = SFi + 1;
-            case 'fid'
-                options.fid.in = 1 ;
-                options.fid.fid = vararginIn{SFi+1};
-                SFi = SFi + 2;
             case 'indice'
                 options.indice = 1;
                 SFi = SFi + 1;
