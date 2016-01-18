@@ -89,7 +89,7 @@ switch finneeStc.dataset{m}.description.dataFormat
         end
         profileOut.plotType = 'profile';
         
-        profileOut.data = axeX';
+        profileOut.data = axeX;
         profileOut.data(:,2) = 0;
         %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
@@ -121,7 +121,7 @@ switch finneeStc.dataset{m}.description.dataFormat
                 'dataset ',  num2str(m), ')'];
         end
         profileOut.plotType = 'profile';
-        profileOut.data = axeX';
+        profileOut.data = axeX;
         profileOut.data(:,2) = 0;
         
         %2.2. getting each MS spectra and caulcaulating the profile

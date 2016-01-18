@@ -324,7 +324,6 @@ for ii = 1:length(MII)
         MZ2 = max(curData(:, 3)) + d/2;
         spectraOut = getSpectra(finneeStc, m, axeX(curData(1, 1) - 1), ...
             'mzInt', [MZ1 MZ2], 'noFig');
-        assignin('base', 'spectraOut', spectraOut)
         if isempty(spectraOut.data), break; end
         [~, d2k] = min(abs(spectraOut.data(:,1)-  mean(curData(:, 3))));
         if spectraOut.data(d2k, 2) > curData(1,2), break; end
@@ -364,20 +363,35 @@ for ii = 1:length(MII)
     fom.data(ii, 11) = fom.data(ii, 5)-mean(curData([1,2, end-1, end],2));    
 end
 
-dataOut = getTrace(finneeStc, ['1@', num2str(m)],  'noFig');
+PIPOut.title = ['''ionic profile'' dataset of the ''centroid spectrum'' dataset ', ...
+            num2str(m)];
+PIPOut.profiles = MII;
+PIPOut.FOM.label = fom.label;
+PIPOut.FOM.data = fom.data;
+PIPOut.axes = finneeStc.dataset{m}.axes;
+
 saveAndPlot()
+save(fullfile(finneeStc.info.parameters.folderOut, ...
+    [finneeStc.info.parameters.fileID '.mat']), 'finneeStc')
 
 %% NESTED FUNCTIONS
 % 1. SAVEANDPLOT
     function saveAndPlot()
+        finneeStc.dataset{end+1}.name = PIPOut.title;
+        finneeStc.dataset{end}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.info = info;
+        finneeStc.dataset{end}.info.parameters = parameters;
+        finneeStc.dataset{end}.info.errors = {};
+
+        timeLabel = finneeStc.dataset{m}.axes.time.label;
+        timeUnit = finneeStc.dataset{m}.axes.time.unit;
+        mzLabel = finneeStc.dataset{m}.axes.mz.label;
+        mzUnit = finneeStc.dataset{m}.axes.mz.unit;
+        intLabel = finneeStc.dataset{m}.axes.intensity.label;
+        intUnit = finneeStc.dataset{m}.axes.intensity.unit;
+        
+        
         % info dataset
-        finneeStc.dataset{end+1}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.infoFunctionUsed.parameters = parameters;
-        finneeStc.dataset{end}.infoFunctionUsed.parameters.decimals = ...
-             finneeStc.dataset{m}.infoFunctionUsed.parameters.decimals;
-        finneeStc.dataset{end}.infoFunctionUsed.listDeconv = listDeconv ;
-        finneeStc.dataset{end}.description.path2DatFile = ...
-            finneeStc.dataset{m}.description.path2DatFile;
         finneeStc.dataset{end}.description.mzStart = 0;
         finneeStc.dataset{end}.description.mzEnd = inf;
         finneeStc.dataset{end}.description.intMin = 0;
@@ -385,58 +399,37 @@ saveAndPlot()
         finneeStc.dataset{end}.description.timeStart = 0;
         finneeStc.dataset{end}.description.timeEnd = inf;
         finneeStc.dataset{end}.description.dataFormat = 'ionic profile';
-        finneeStc.dataset{end}.description.index2DotDat = [];
-        finneeStc.dataset{end}.description.axe = [0 0 1];
-        finneeStc.dataset{end}.description.fom = {};
-        finneeStc.dataset{end}.description.timeLabel = ...
-            finneeStc.dataset{m}.description.timeLabel;
-        finneeStc.dataset{end}.description.timeUnit = ...
-            finneeStc.dataset{m}.description.timeUnit;
-        finneeStc.dataset{end}.description.mzLabel = ...
-            finneeStc.dataset{m}.description.mzLabel;
-        finneeStc.dataset{end}.description.mzUnit = ...
-            finneeStc.dataset{m}.description.mzUnit;
-        finneeStc.dataset{end}.description.intLabel = ...
-            finneeStc.dataset{m}.description.intLabel;
-        finneeStc.dataset{end}.description.intUnit = ...
-            finneeStc.dataset{m}.description.intUnit;
+        finneeStc.dataset{end}.indexInDat = [];
+        finneeStc.dataset{end}.axes = finneeStc.dataset{m}.axes;
+        finneeStc.dataset{end}.trace = {};
         
         % saving new axe, fom, PIP and calculating profiles
-        fidWriteDat = fopen(finneeStc.dataset{end}.description.path2DatFile, 'ab');
-        newAxe = axeX(indTimeStt:indTimeEnd);
+        fidWriteDat = fopen(finneeStc.path2dat, 'ab');
         mzStart = inf; mzEnd = 0; intMin = inf; intMax = 0;
         timeStart = inf; timeEnd = 0;
-        fseek(fidWriteDat, 0, 'eof');
-        finneeStc.dataset{end}.description.axe(1) = ftell(fidWriteDat);
-        fwrite(fidWriteDat, newAxe, 'double');
-        finneeStc.dataset{end}.description.axe(2) = ftell(fidWriteDat);
-        [TICP, BPP, mzBPP] = deal(newAxe);
+        
+       
+        [TICP, BPP, mzBPP] = deal(axeX);
         TICP(:,2) = 0; BPP(:,2) = 0; mzBPP(:,2) = 0;
-        finneeStc.dataset{end}.description.fom.label = fom.label;
-        finneeStc.dataset{end}.description.fom.data = ...
-            [ftell(fidWriteDat) 0 length(fom.label)];
-        fwrite(fidWriteDat, fom.data, 'double');
-        finneeStc.dataset{end}.description.fom.data(2) = ftell(fidWriteDat);
-        finneeStc.dataset{end}.description.fom.data(3) = length(fom.label);
+        finneeStc.dataset{end}.FOM.label = fom.label;
+        finneeStc.dataset{end}.FOM.data = fom.data;
+        
         for NF2 = 1:length(MII)
             curData = MII{NF2};
             TICP(curData(:,1), 2) = TICP(curData(:,1), 2) + curData(:,2);
             ind2add = BPP(curData(:,1), 2) < curData(:,2);
             BPP(curData(ind2add,1), 2) = curData(ind2add,2);
             mzBPP(curData(ind2add,1), 2) = curData(ind2add,3);
-            finneeStc.dataset{end}.description.index2DotDat(NF2,1) = ...
-                ftell(fidWriteDat);
+            finneeStc.dataset{end}.indexInDat(NF2,1) = ftell(fidWriteDat);
             fwrite(fidWriteDat, curData, 'double');
-            finneeStc.dataset{end}.description.index2DotDat(NF2,2) = ...
-                ftell(fidWriteDat);
-            finneeStc.dataset{end}.description.index2DotDat(NF2,3) =...
-                length(curData(1,:));
+            finneeStc.dataset{end}.indexInDat(NF2,2) = ftell(fidWriteDat);
+            finneeStc.dataset{end}.indexInDat(NF2,3) = length(curData(1,:));
             if mzStart > min(curData(:,3)), mzStart = min(curData(:,3)); end
             if mzEnd < max(curData(:,3)), mzEnd = max(curData(:,3)); end
             if intMin > min(curData(:,2)), intMin = min(curData(:,2)); end
             if intMax < max(curData(:,2)), intMax = max(curData(:,2)); end
-            if timeStart > newAxe(min(curData(:,1))), timeStart = newAxe(min(curData(:,1))); end
-            if timeEnd < newAxe(max(curData(:,1))), timeEnd = newAxe(max(curData(:,1))); end
+            if timeStart > axeX(min(curData(:,1))), timeStart = axeX(min(curData(:,1))); end
+            if timeEnd < axeX(max(curData(:,1))), timeEnd = axeX(max(curData(:,1))); end
         end
         finneeStc.dataset{end}.description.mzStart = mzStart;
         finneeStc.dataset{end}.description.mzEnd = mzEnd;
@@ -447,101 +440,92 @@ saveAndPlot()
         
         % saving profiles
         % ** TICP
-        finneeStc.dataset{end}.trace{1}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{1}.infoFunctionUsed.parameters = {};
-        finneeStc.dataset{end}.trace{1}.description.name = ...
-            ['Total Ion Current Profile (dataset ', num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{1}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{1}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{1}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{1}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{1}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{1}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{1}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+        finneeStc.dataset{end}.trace{1}.name = ...
+            ['Total Ion Current Profile (dataset ', ...
+            num2str(length(finneeStc.dataset)), ')'];
+        finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'TIP';
+        finneeStc.dataset{end}.trace{1}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{1}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{1}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{1}.axeY.label = intLabel;
+        finneeStc.dataset{end}.trace{1}.axeY.unit = intUnit;
+        finneeStc.dataset{end}.trace{1}.indexInDat  = [ftell(fidWriteDat), 0, 2];
         fwrite(fidWriteDat, TICP, 'double');
-        finneeStc.dataset{end}.trace{1}.index2DotDat(2) = ftell(fidWriteDat);
+        finneeStc.dataset{end}.trace{1}.indexInDat(2) = ftell(fidWriteDat);
         
         % ** BPP
-        finneeStc.dataset{end}.trace{2}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{2}.infoFunctionUsed.parameters = {};
-        finneeStc.dataset{end}.trace{2}.description.name = ...
-            ['Base Peak Profile (dataset ', num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{2}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{2}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{2}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{2}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{2}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{2}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{2}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+        finneeStc.dataset{end}.trace{2}.name = ...
+            ['Base Peak Profile (dataset ', ...
+            num2str(length(finneeStc.dataset)), ')'];
+        finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'BPP';
+        finneeStc.dataset{end}.trace{2}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{2}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{2}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{2}.axeY.label = intLabel;
+        finneeStc.dataset{end}.trace{2}.axeY.unit = intUnit;
+        finneeStc.dataset{end}.trace{2}.indexInDat  = [ftell(fidWriteDat), 0, 2];
         fwrite(fidWriteDat, BPP, 'double');
-        finneeStc.dataset{end}.trace{2}.index2DotDat(2) = ftell(fidWriteDat);
-        
+        finneeStc.dataset{end}.trace{2}.indexInDat(2) = ftell(fidWriteDat);
+
         % ** mzBPP
-        finneeStc.dataset{end}.trace{3}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{3}.infoFunctionUsed.parameters = {};
-        finneeStc.dataset{end}.trace{3}.description.name =...
-            ['m/z @ Base Peak  (dataset ', num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{3}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{3}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{3}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{3}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{3}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{3}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{3}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
+         finneeStc.dataset{end}.trace{3}.name = ...
+            ['m/z @ Base Peak (dataset ', ...
+            num2str(length(finneeStc.dataset)), ')'];
+        finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.trace{1}.code = 'mzBPP';
+        finneeStc.dataset{end}.trace{3}.plotType = 'profile';
+        finneeStc.dataset{end}.trace{3}.axeX.label = timeLabel;
+        finneeStc.dataset{end}.trace{3}.axeX.unit = timeUnit;
+        finneeStc.dataset{end}.trace{3}.axeY.label = mzLabel;
+        finneeStc.dataset{end}.trace{3}.axeY.unit = mzUnit;
+        finneeStc.dataset{end}.trace{3}.indexInDat  = [ftell(fidWriteDat), 0, 2];
         fwrite(fidWriteDat, mzBPP, 'double');
-        finneeStc.dataset{end}.trace{3}.index2DotDat(2) = ftell(fidWriteDat);
-        
-        % ** residual
-        finneeStc.dataset{end}.trace{4}.infoFunctionUsed.info = info;
-        finneeStc.dataset{end}.trace{4}.infoFunctionUsed.parameters = {};
-        finneeStc.dataset{end}.trace{4}.description.name = ...
-            ['Residual: TICP (dataset ', num2str(m), ')',...
-            '- TICP (dataset ', num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{4}.description.dateOfCreation = clock;
-        finneeStc.dataset{end}.trace{4}.description.plotType = 'profile';
-        finneeStc.dataset{end}.trace{4}.description.axeX.label = ...
-            finneeStc.dataset{end}.description.timeLabel;
-        finneeStc.dataset{end}.trace{4}.description.axeX.unit = ...
-            finneeStc.dataset{end}.description.timeUnit;
-        finneeStc.dataset{end}.trace{4}.description.axeY.label = ...
-            finneeStc.dataset{end}.description.intLabel;
-        finneeStc.dataset{end}.trace{4}.description.axeY.unit = ...
-            finneeStc.dataset{end}.description.intUnit;
-        finneeStc.dataset{end}.trace{4}.index2DotDat  = [ftell(fidWriteDat), 0, 2];
-        fwrite(fidWriteDat, [TICP(:,1) dataOut(:,2)-TICP(:,2)] , 'double');
-        finneeStc.dataset{end}.trace{4}.index2DotDat(2) = ftell(fidWriteDat);
+        finneeStc.dataset{end}.trace{3}.indexInDat(2) = ftell(fidWriteDat);
         
         fclose(fidWriteDat);
-        save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-            [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
-        origSize =  finneeStc.dataset{m}.description.index2DotDat(end,2) - ...
-            finneeStc.dataset{m}.description.index2DotDat(1,1);
-        finSize =  finneeStc.dataset{end}.description.index2DotDat(end,2) - ...
-            finneeStc.dataset{end}.description.index2DotDat(1,1);
+        
+        origSize =  finneeStc.dataset{m}.indexInDat(end,2) - ...
+            finneeStc.dataset{m}.indexInDat(1,1);
+        finSize =  finneeStc.dataset{end}.indexInDat(end,2) - ...
+            finneeStc.dataset{end}.indexInDat(1,1);
+        
+       
+        TI_ori = getTrace(finneeStc,  ['1@', num2str(m)], 'noFig');
+        BP_ori = getTrace(finneeStc,  ['2@', num2str(m)], 'noFig');
+        
         figure
-        subplot(3,1,1)
+        subplot(2,2,1)
+        plot(TI_ori.data(:,1), TI_ori.data(:,2));
         hold on
-        getTrace(finneeStc, ['1@', num2str(m)]);
+        plot(TICP(:,1), TICP(:,2))
         hold off
-        subplot(3,1,2)
+        title('Comparaison total ion current profiles')
+        xlabel([TI_ori.axes.axeX.label, ' / ', TI_ori.axes.axeX.unit]);
+        ylabel([TI_ori.axes.axeY.label, ' / ', TI_ori.axes.axeY.unit]);
+        
+        subplot(2,2,3)
+        plot(TI_ori.data(:,1), TI_ori.data(:,2)-TICP(:,2));
+        title('Residual')
+        xlabel([TI_ori.axes.axeX.label, ' / ', TI_ori.axes.axeX.unit]);
+        ylabel([TI_ori.axes.axeY.label, ' / ', TI_ori.axes.axeY.unit]);
+        
+        subplot(2,2,2)
+        plot(BP_ori.data(:,1), BP_ori.data(:,2));
         hold on
-        m2 = length(finneeStc.dataset);
-        getTrace(finneeStc, ['1@', num2str(m2)]);
-        subplot(3,1,3)
-        hold on
-        getTrace(finneeStc, ['4@', num2str(m2)]);
+        plot(BPP(:,1), BPP(:,2))
+        hold off
+        title('Comparaison base peak profiles')
+        xlabel([BP_ori.axes.axeX.label, ' / ', BP_ori.axes.axeX.unit]);
+        ylabel([BP_ori.axes.axeY.label, ' / ', BP_ori.axes.axeY.unit]);
+        
+        subplot(2,2,4)
+        plot(BP_ori.data(:,1), BP_ori.data(:,2)-BPP(:,2));
+        title('Residual')
+        xlabel([BP_ori.axes.axeX.label, ' / ', BP_ori.axes.axeX.unit]);
+        ylabel([BP_ori.axes.axeY.label, ' / ', BP_ori.axes.axeY.unit]);
+
         
         fprintf('Summary of the conditions used: \n\n')
         fprintf('\t Intensity threshold: \t \t \t \t \t \t %d \n', intThresh)

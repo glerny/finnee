@@ -326,7 +326,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.description.dataFormat = datasetType;
     finneeStc.dataset{1}.indexInDat = MSIndex;
 
-    finneeStc.dataset{1}.axes.time.values = axeX;
+    finneeStc.dataset{1}.axes.time.values = axeX';
     finneeStc.dataset{1}.axes.time.label = timeLabel;
     finneeStc.dataset{1}.axes.time.unit = timeUnit;
     finneeStc.dataset{1}.axes.mz.values = [];
@@ -348,7 +348,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{1}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{1}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{1}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX TICP], 'double');
+    fwrite(fidWriteDat, [axeX' TICP'], 'double');
     finneeStc.dataset{1}.trace{1}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** BPP
@@ -361,7 +361,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{2}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{2}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{2}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX BPP], 'double');
+    fwrite(fidWriteDat, [axeX' BPP'], 'double');
     finneeStc.dataset{1}.trace{2}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** mzBPP
@@ -374,7 +374,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{3}.axeY.label = mzLabel;
     finneeStc.dataset{1}.trace{3}.axeY.unit = mzUnit;
     finneeStc.dataset{1}.trace{3}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX mzBPP], 'double');
+    fwrite(fidWriteDat, [axeX' mzBPP'], 'double');
     finneeStc.dataset{1}.trace{3}.indexInDat(2) = ftell(fidWriteDat);
     end
 end

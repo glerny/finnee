@@ -45,16 +45,9 @@ info.function.ownerContact = 'guillaume@fe.up.pt';
 % compulsory parameters
 
 m = parameters.dataset;
-finneeStc.dataset{end+1}.name = ...
-    ['''centroid spectrum'' dataset of the ''profile spectrum'' dataset ', ...
-    num2str(m)];
-finneeStc.dataset{end}.dateOfCreation = datetime;
-finneeStc.dataset{end}.info = info;
-finneeStc.dataset{end}.info.parameters = parameters;
-finneeStc.dataset{end}.info.errors = {};
 
 [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);
-axeX = []; TICP = [];  BPP = []; mzBPP = []; MSIndex = [];
+TICP = [];  BPP = []; mzBPP = []; MSIndex = [];
 datasetType = 'centroid spectrum';
 
 fidReadDat = fopen(finneeStc.path2dat, 'a+b');
@@ -129,6 +122,14 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
 % 1. SAVE2STRUCT
 % save results to the finnee structure
     function save2struc()
+        finneeStc.dataset{end+1}.name = ...
+            ['''centroid spectrum'' dataset of the ''profile spectrum'' dataset ', ...
+            num2str(m)];
+        finneeStc.dataset{end}.dateOfCreation = datetime;
+        finneeStc.dataset{end}.info = info;
+        finneeStc.dataset{end}.info.parameters = parameters;
+        finneeStc.dataset{end}.info.errors = {};
+
         timeLabel = finneeStc.dataset{m}.axes.time.label;
         timeUnit = finneeStc.dataset{m}.axes.time.unit;
         mzLabel = finneeStc.dataset{m}.axes.mz.label;
@@ -169,7 +170,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{1}.axeY.label = intLabel;
         finneeStc.dataset{end}.trace{1}.axeY.unit = intUnit;
         finneeStc.dataset{end}.trace{1}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX TICP], 'double');
+        fwrite(fidReadDat, [axeX TICP'], 'double');
         finneeStc.dataset{end}.trace{1}.indexInDat(2) = ftell(fidReadDat);
         
         % ** BPP
@@ -184,7 +185,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{2}.axeY.label = intLabel;
         finneeStc.dataset{end}.trace{2}.axeY.unit = intUnit;
         finneeStc.dataset{end}.trace{2}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX BPP], 'double');
+        fwrite(fidReadDat, [axeX BPP'], 'double');
         finneeStc.dataset{end}.trace{2}.indexInDat(2) = ftell(fidReadDat);
         
         % ** mzBPP
@@ -199,7 +200,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{3}.axeY.label = mzLabel;
         finneeStc.dataset{end}.trace{3}.axeY.unit = mzUnit;
         finneeStc.dataset{end}.trace{3}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX mzBPP], 'double');
+        fwrite(fidReadDat, [axeX mzBPP'], 'double');
         finneeStc.dataset{end}.trace{3}.indexInDat(2) = ftell(fidReadDat);
     end
 

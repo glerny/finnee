@@ -132,7 +132,7 @@ switch finneeStc.dataset{m}.description.dataFormat
         spectraOut.plotType = 'stem';
         
         %2.3 getting each PIP
-        for ii = 1:length(finneeStc.dataset{m}.description.index2DotDat(:,1))
+        for ii = 1:length(finneeStc.dataset{m}.indexInDat(:,1))
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
