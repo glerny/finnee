@@ -1,4 +1,4 @@
-function [finneeStc, fom, MII] = getPIP( finneeStc, dataset, intThresh, diffMass, ptsPerPeak, varargin)
+function [finneeStc, PIPOut] = getPIP( finneeStc, dataset, intThresh, diffMass, ptsPerPeak, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 %   GETPIP allows to extract from a 'centroid spectrum' dataset pure ion profiles
@@ -6,7 +6,7 @@ function [finneeStc, fom, MII] = getPIP( finneeStc, dataset, intThresh, diffMass
 %   separate noise from relevant information and the maximum mass difference between
 %   datapoints in successive scans to potentially belong to the same ionic 
 %   profile (diffMass). 
-% 2. PARAMETERS:
+% 2. INPUT PARAMETERS:
 %   .required. GETPIP requires at least 5 parameters
 %       finneeStc
 %           is the structure that contains information about the run
@@ -37,25 +37,24 @@ function [finneeStc, fom, MII] = getPIP( finneeStc, dataset, intThresh, diffMass
 %       'timeInt' followed by a 2x1 array
 %           Allow to only consider the datapoints with time (scan number)
 %           are within the defined interval.
-% 		'concat' followed by 'yes' or 'no' 
-%           compare PIP to verify if the null hypothesis is verified (t-test). 
-%			If yes, and the PIP are not separated by nore than 2 nulls values they 
-%           are concatenated in a single PIP.
 %
-% 3. EXAMPLES:
-%	finneeStc = GETPIP(  finneeStc,1, 100, 0.01, 3)
+% 3. OUTPUT PARAMETERS:
 %
-% 4. COPYRIGHT
-%   Copyright 2014-2015 G. Erny (guillaume.erny@finnee.com), FEUP, Porto, Portugal
+% 4. EXAMPLES:
+%   [finneeStc, PIPOut] = getPIP( finneeStc, 2, 25, 0.005, 4)
+%
+% 5. COPYRIGHT
+%   Copyright 2015-2016 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
 %
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'getPIP';
-info.description{1} = 'get the PIP from the original ''centroid spectrum'' dataset';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '25/06/2015_gle01';
-info.ownerContact = 'guillaume@fe.up,pt';
+info.function.functionName = 'getPIP';
+info.function.description{1} = 'get the PIP from the original ''centroid spectrum'' dataset';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '18/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
+
 [parameters, options] = ...
     initFunction(nargin,  finneeStc, dataset, intThresh, diffMass, ...
     ptsPerPeak,  varargin );
@@ -66,8 +65,9 @@ m = parameters.dataset;
 iT = parameters.intThresh;
 d = parameters.diffMass;
 p = parameters.ptsPerPeak;
-fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-listDeconv = {};
+
+
+fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
 % 2. FINDING SEQUENCES OF POINT THAT MAY BELONG TO A PIP
 % 2.1. Filtering out dara whith I < intThres.
@@ -78,9 +78,8 @@ listDeconv = {};
 switch finneeStc.dataset{m}.description.dataFormat
     case 'centroid spectrum'    % !THIS FUNCTION ONLY WORK WITH CENTROID 
                                 % SPECTRUM DATASET!
-        index = finneeStc.dataset{m}.description.axe;
-        fseek(fidReadDat, index(1), 'bof');
-        axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+                                
+        axeX = finneeStc.dataset{m}.axes.time.values;
         indTimeStt = findCloser(parameters.xMin, axeX);
         indTimeEnd = findCloser(parameters.xMax, axeX);
         sumMS = []; 
@@ -89,7 +88,7 @@ switch finneeStc.dataset{m}.description.dataFormat
             if options.display 
                 fprintf('processing scan %d out of %d scans \n', ii, length(axeX))
             end
-            index = finneeStc.dataset{m}.description.index2DotDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
             MS = ...
                 fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
@@ -110,7 +109,7 @@ switch finneeStc.dataset{m}.description.dataFormat
 			
             if ~isempty(MS)
                 if isempty(sumMS)
-		    sumMS = [MS(:,3) MS(:,2) MS(:,1)];
+                    sumMS = [MS(:,3) MS(:,2) MS(:,1)];
                 else
                     sumMS = [sumMS; [MS(:,3) MS(:,2) MS(:,1)]];
                 end
@@ -138,7 +137,7 @@ ind2cut2MZ = find(diff(ind2cutMZ) >= p);
 % contain more than ptsPerPeak
 
 MII = {};
-% MII is the structure that will datapoints for each individual PIP
+
 for ii = 1:length(ind2cut2MZ)
    provData = sortrows...
        (sumMS(ind2cutMZ(ind2cut2MZ(ii))+1:ind2cutMZ(ind2cut2MZ(ii)+1),:), 1);
@@ -159,7 +158,7 @@ for ii = 1:length(ind2cut2MZ)
 end
 
 
-% 3.3. If the deconvolution step is skiped, each partial PIP are verify for time doublons
+% 3.3. Each partial PIP are verify for time doublons
 %      (i.e. two points in the MII with the same scan number)
 ii = 1;
 while 1
@@ -218,92 +217,8 @@ while 1
     if ii > length(MII), break; end
 end
 
-% %%%%%%%%%%%%%% ADDING THE 08-10-2015 FIND ionic distribution that consist
-% %%%%%%%%%%%%%% of the same ion (t-test)
-if parameters.concat.do
-    fom.data = zeros(length(MII), 4);
-    for ii = 1:length(MII)
-        curData = MII{ii};
-        % 	% 4.2. Calculating figures of merits
-        fom.data(ii, 1) = ii;
-        fom.data(ii, 2) = mean(curData(:,3));
-        fom.data(ii, 3) = std(curData(:,3));
-        fom.data(ii, 4) = length(curData(:,1));
-    end
-    
-    ll = length(fom.data(:,1));
-    ResCorr = zeros(ll,1);
-    for ii = 1:ll
-        if options.display
-            fprintf('t-test and concatenated: %d out of %d \n', ii, ll)
-        end
-        s = ((fom.data(ii,4)-1)*fom.data(ii,3)^2+ (fom.data(:,4)-1).*...
-            fom.data(:,3).^2)./(fom.data(ii,4)+fom.data(:,4)-2);
-        t = abs(fom.data(ii,2)-fom.data(:,2))./(sqrt(s).*...
-            (sqrt(1/fom.data(ii,4)+1/fom.data(:,4)))');
-        degFre = fom.data(ii,4) + fom.data(:,4) - 2;
-        tcoeff = zeros(ll,1);
-        for jj = length(parameters.concat.tdis):-1:1
-            indm = find(degFre <= parameters.concat.tdis(jj, 1));
-            tcoeff(indm) = parameters.concat.tdis(jj, 2);
-        end
-        ind = find(t <= tcoeff);
-        
-        if length(ind) > 1
-            ind2rem = find(ind == ii);
-            ind(ind2rem) = [];
-            ResCorr(ii,1) = ii;
-            for jj = 1:length(ind)
-                ResCorr(ii, jj+1) = ind(jj);
-            end
-        end
-    end
-    
-    indpur =  find(ResCorr(:,1) == 0); % pure trace not to mingle
-    ResCorr(indpur,:) = [];
-    toDell = [];
-    
-    list = {};
-    while ~isempty(ResCorr)
-        list1 = [];
-        list2 = nonzeros(ResCorr(end,:));
-        while length(list1) ~= length(list2)
-            list1 = list2;
-            list2 = [];
-            for ii = 1:length(list1)
-                ind2list = find(ResCorr(:,1) == list1(ii));
-                list2 = [list2; nonzeros(ResCorr(ind2list,:))];
-            end
-            list2 = unique(list2);
-        end
-        list{end+1} = list2;
-        ind2rem = [];
-        for ii = 1:length(list2)
-            ind2test = find(ResCorr(:,1) == list1(ii));
-            if ~isempty(ind2test)
-                ind2rem(end+1) = ind2test;
-            end
-        end
-        ResCorr(ind2rem, :) = [];
-    end
-
-
-    for ii = 1:length(list)
-        newSerie = [];
-        for jj = 1:length(list{ii})
-            newSerie = [newSerie; MII{list{ii}(jj)}];
-        end
-        newSerie = sortrows(newSerie, 1);
-        toDell = [toDell; list{ii}];
-        ind2cut = ...
-            [0; find(diff(newSerie(:,1)) > 1+ parameters.concat.snul); ...
-            length(newSerie(:,1))];
-        for jj = 1:length(ind2cut)-1
-            MII{end+1} = newSerie(ind2cut(jj)+1:ind2cut(jj+1), :);
-        end
-    end
-    MII(toDell) = [];
-end
+% %%%%%%%%%%%%%% ADDING THE 08-10-2015 FIND ionic distribution that belong
+% %%%%%%%%%%%%%% to the same ion (t-test)
 
 if parameters.concat.do
     fom.data = zeros(length(MII), 4);
@@ -389,6 +304,7 @@ if parameters.concat.do
     end
     MII(toDell) = [];
 end
+
 
 % 4. FINDING EDGES AND COMPLETING PARTIAL PIP TO PIP 
 	% 4.1. Completing partial PIP
@@ -406,15 +322,14 @@ for ii = 1:length(MII)
         if curData(1, 1) - 1 <1, break; end
         MZ1 = min(curData(:, 3)) - d/2;
         MZ2 = max(curData(:, 3)) + d/2;
-        assignin('base', 'axeX', axeX)
-        assignin('base', 'curData', curData)
         spectraOut = getSpectra(finneeStc, m, axeX(curData(1, 1) - 1), ...
             'mzInt', [MZ1 MZ2], 'noFig');
-        if isempty(spectraOut), break; end
-        [~, d2k] = min(abs(spectraOut(:,1)-  mean(curData(:, 3))));
-        if spectraOut(d2k, 2) > curData(1,2), break; end
-        curData = [[curData(1, 1) - 1, spectraOut(d2k, 2),...
-            spectraOut(d2k, 1)]; curData];
+        assignin('base', 'spectraOut', spectraOut)
+        if isempty(spectraOut.data), break; end
+        [~, d2k] = min(abs(spectraOut.data(:,1)-  mean(curData(:, 3))));
+        if spectraOut.data(d2k, 2) > curData(1,2), break; end
+        curData = [[curData(1, 1) - 1, spectraOut.data(d2k, 2),...
+            spectraOut.data(d2k, 1)]; curData];
     end
         
 	% Getting fronting points
@@ -424,11 +339,12 @@ for ii = 1:length(MII)
         MZ2 = max(curData(:, 3)) + d/2;
         spectraOut = getSpectra(finneeStc, m, axeX(curData(end, 1) + 1), ...
             'mzInt', [MZ1 MZ2], 'noFig');
-        if isempty(spectraOut), break; end
-        [~, d2k] = min(abs(spectraOut(:,1)-  mean(curData(:, 3))));
-        if spectraOut(d2k, 2) > curData(end,2), break; end
+        if isempty(spectraOut.data), break; end
+        [~, d2k] = min(abs(spectraOut.data(:,1)-  mean(curData(:, 3))));
+        if spectraOut.data(d2k, 2) > curData(end,2), break; end
         curData = [curData; ...
-            [curData(end, 1) + 1, spectraOut(d2k, 2), spectraOut(d2k, 1)]];
+            [curData(end, 1) + 1, spectraOut.data(d2k, 2), ...
+            spectraOut.data(d2k, 1)]];
     end
     MII{ii} = curData;
 	
@@ -685,9 +601,6 @@ if  narginIn > 5
     length(vararginIn)
     while SFi <= length(vararginIn)
         switch vararginIn{SFi}
-            case 'test'
-                parameters.test = 1;
-                SFi = SFi + 1;
             case 'mzInt'
                 if length(vararginIn{SFi+1}) == 2
                     mzInt = sort(vararginIn{SFi+1});
@@ -703,10 +616,7 @@ if  narginIn > 5
                 end
                 SFi = SFi + 2;
             case 'noFig'
-                options.display  = 1;
-                SFi = SFi + 1;
-            case 'save2str'
-                options.save2str = 1;
+                options.display  = 0;
                 SFi = SFi + 1;
             otherwise
                 error('myApp:argChk', ...
