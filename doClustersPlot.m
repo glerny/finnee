@@ -1,20 +1,20 @@
-function dataOut = doClustersPlot(finneeStc, address, HL, minInt, varargin)
+function clustersOut = doClustersPlot(finneeStc, address, HL, minInt, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 % DOCLUSTERPLOT allows to select clusters at given hierarchical level
 % defined as the minimal correlation coefficient between pure ion profiles
 % (PIP) within each cluster.
 %
-% 2. PARAMETERS:
+% 2. INPUT PARAMETERS
 %   .required. DOCLUSTERPLOT requires at least 4 parameters
 %       finneeStc
 %           is the finnee structure that contain information about the run
 %           and link and indexation of the associated dat file. The
 %           strcuture should have been create by function such as 
 %           MZML2STRUCT
-%       addresss
+%       address
 %           defined the target cluster analysis (HACA) within the target 
-%           dataset. The format should be 'HACA@dataset'.
+%           dataset. The format should be 'HA@dataset'.
 %       HL
 %           is the hierarchical level at which the clusters will be
 %           retrieved from the previous HACA analysis (see DOHACA). The
@@ -25,26 +25,28 @@ function dataOut = doClustersPlot(finneeStc, address, HL, minInt, varargin)
 %           is the threshold intensity. Clusters that do not contain one
 %           PIP with a maximum intensity higher than this threshold will
 %           not be displayed
-
+%
 %   .optionals. VARARGIN describes the optional paramters.  
 %       'displayOff' 
 %           Allow to avoid any display in the matlab command window
 %       'minPIPperCluster' followed by an integer (default 2)
 %           Only record clusters with 'minPIPperCluster' PIP
 %
-% 3. EXAMPLES:
-%	dataOut = doClustersPlot(finneeStc, '1@2', 0.95, 500)
+% 3. OUTPUT PARAMETERS
 %
-% 4. COPYRIGHT
-%   Copyright 2014-2015 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
+% 4. EXAMPLES:
+%	dataOut = doClustersPlot(finneeStc, '1@3', 0.95, 1000)
+%
+% 5. COPYRIGHT
+%   Copyright 2015-2016 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'doHACA';
-info.description{1} = 'Calculate the herarchical structure of '' dataset';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '10/07/2015_gle01';
-info.ownerContact = 'guillaume@fe.up.pt';
+info.function.functionName =  'doHACA';
+info.function.description{1} = 'Calculate the herarchical structure of '' dataset';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '18/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
 
 [parameters, options] = ...
     initFunction(nargin, finneeStc, address, HL, minInt, varargin);
@@ -54,23 +56,14 @@ info.ownerContact = 'guillaume@fe.up.pt';
 m = parameters.dataset;
 n = parameters.HStruct;
 
-fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-fom.label = finneeStc.dataset{m}.description.fom.label;
-index = finneeStc.dataset{m}.description.fom.data;
-fseek(fidReadDat, index(1), 'bof');
-fom.data = fread(fidReadDat, ...
-    [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-index = finneeStc.dataset{m}.description.axe;
-fseek(fidReadDat, index(1), 'bof');
-axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-    index(3)], 'double');
+fidReadDat = fopen(finneeStc.path2dat, 'rb');
+fom.label = finneeStc.dataset{m}.FOM.label;
+fom.data = finneeStc.dataset{m}.FOM.data;
+axeX = finneeStc.dataset{m}.axes.time.values;
         
-formatSpec = ['%.',...
-    num2str(finneeStc.dataset{m}.infoFunctionUsed.parameters.decimals), 'f'];
-% TOBECHANGED
+formatSpec = finneeStc.info.parameters.prec4mz;
 
-clusters.step = ...
-    finneeStc.dataset{m}.clusterAnalysis{n}.HStructure.step;
+clusters.step = finneeStc.dataset{m}.CA{n}.HStructure.step;
 
 % 2. FIND THE HL AND LOAD TARGETED CLUSTERS
 targetStep = [];
@@ -82,8 +75,7 @@ end
 if isempty(targetStep), targetStep = ii ; end
 
 
-index = finneeStc.dataset{m}.clusterAnalysis{n}...
-    .HStructure.step{targetStep}.index2DotDat;
+index = clusters.step{targetStep}.index2DotDat;
 fseek(fidReadDat, index(1), 'bof');
 data2load = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
     index(3)], 'double');
@@ -101,11 +93,11 @@ fomClusters.data = [];
 figure
 PIPinClust = 0;
 for ii = 1:length(selClusters)
+    
     % Calculate SumSIPinCl
     sumPIPinCl = zeros(length(axeX), 1);
     for jj = 1:length(selClusters{ii})
-        index = finneeStc.dataset{m}.description...
-            .index2DotDat(selClusters{ii}(jj), :)
+        index = finneeStc.dataset{m}.indexInDat(selClusters{ii}(jj), :);
         fseek(fidReadDat, index(1), 'bof');
         PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
             index(3)], 'double');

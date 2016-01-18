@@ -6,7 +6,7 @@ function [finneeStc, PIPOut] = getPIP( finneeStc, dataset, intThresh, diffMass, 
 %   separate noise from relevant information and the maximum mass difference between
 %   datapoints in successive scans to potentially belong to the same ionic 
 %   profile (diffMass). 
-% 2. INPUT PARAMETERS:
+% 2. INPUT PARAMETERS
 %   .required. GETPIP requires at least 5 parameters
 %       finneeStc
 %           is the structure that contains information about the run

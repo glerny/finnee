@@ -5,7 +5,7 @@ function finneeStc = doHACA(finneeStc, dataset, varargin)
 % individual PIP contained in a 'ionic profile' dataset via their
 % correlation coefficient.
 %
-% 2. PARAMETERS:
+% 2. INPUT PARAMETERS
 %   .required. DOHACA requires at least 2 parameters
 %       finneeStc
 %           is the finnee structure that contain information about the run
@@ -21,27 +21,25 @@ function finneeStc = doHACA(finneeStc, dataset, varargin)
 %       'maxProfiles' followed by an integer (default 2000)
 %           Allow to limit the number of PIP based on their maximum
 %           intensuty. This allow to speed up the compuational time.
-%       'minCorCoef' followed by a number (default 0.7)
-%           Stop the HACA when the correlation is lower than 0.7, this
+%       'minCorCoef' followed by a number (default 0.9)
+%           Stop the HACA when the correlation is lower than 0.9, this
 %           mainly for size reason
-%       'minPIPperCluster' follwoed by an integer (default 2)
-%           Only record clusters with 'minPIPperCluster' PIP
-%       'filter'
 %
 % 3. EXAMPLES:
-%	finneeStc = doHACA(finneeStc, 2)
+%	finneeStc = doHACA(finneeStc, 3)
 %
-% 4. COPYRIGHT
-% Copyright 2014-2015 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
+% 5. COPYRIGHT
+%   Copyright 2015-2016 G. Erny (guillaume@fe.up.pt), FEUP, Porto, Portugal
 %
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
-info.functionName = 'doHACA';
-info.description{1} = 'Calculate the herarchical structure of '' dataset';
-info.matlabVersion = '8.5.0.197613 (R2015a)';
-info.version = '09/07/2015_gle01';
-info.ownerContact = 'guillaume@fe.up.pt';
+info.function.functionName =  'doHACA';
+info.function.description{1} = 'Calculate the herarchical structure of '' dataset';
+info.function.matlabVersion = '8.5.0.197613 (R2015a)';
+info.function.version = '18/01/2016';
+info.function.ownerContact = 'guillaume@fe.up.pt';
+
 [parameters, options] = ...
     initFunction(nargin,  finneeStc, dataset,  varargin );
 %INITFUNCTION - sub function used to verify the entries and load the optional and
@@ -52,17 +50,12 @@ m = parameters.dataset;
 % 2. CHECKING THE DATA TYPE
 switch finneeStc.dataset{m}.description.dataFormat
     case 'ionic profile'
-        fidReadDat = fopen(finneeStc.dataset{m}.description.path2DatFile, 'rb');
-        fom.label = finneeStc.dataset{m}.description.fom.label;
-        index = finneeStc.dataset{m}.description.fom.data;
-        fseek(fidReadDat, index(1), 'bof');
-        fom.data = fread(fidReadDat, ...
-            [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+        
+        fidReadDat = fopen(finneeStc.path2dat, 'rb');
+        fom.label = finneeStc.dataset{m}.FOM.label;
+        fom.data = finneeStc.dataset{m}.FOM.data;
         [fom.data, IX] = sortrows(fom.data, -5);
-        index = finneeStc.dataset{m}.description.axe; 
-        fseek(fidReadDat, index(1), 'bof');
-        axeX = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-            index(3)], 'double');
+        axeX = finneeStc.dataset{m}.axes.time.values;
         PIPInUse = 1:length(fom.data(:,1));
         if parameters.filter.on
             fom.filter = finneeStc.dataset{m}.description.fom.filter(IX);
@@ -77,11 +70,10 @@ switch finneeStc.dataset{m}.description.dataFormat
         if options.display, disp('Calculating matrix of correlations'); end
         for ii = 1:length(matrixOfPIP(1,:))
             II = fom.data(PIPInUse(ii), 1);
-            index = finneeStc.dataset{m}.description.index2DotDat(II, :);
+            index = finneeStc.dataset{m}.indexInDat(II, :);
             fseek(fidReadDat, index(1), 'bof');
             curPIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
                 index(3)], 'double');
-            
             matrixOfPIP(curPIP(:,1), ii) = curPIP(:,2);
             clusters.step{1}.cluster{ii} = ii;
         end
@@ -120,20 +112,18 @@ switch finneeStc.dataset{m}.description.dataFormat
         end
         
         % 4.  SAVING THE HIERARCHICAL STRUCTURE
-        if ~isfield(finneeStc.dataset{m}, 'clusterAnalysis')
-            finneeStc.dataset{m}.clusterAnalysis = {};
+        if isfield(finneeStc.dataset{m}, 'CA')
+            error('a cluster analysis already exists in this dataset')
         end
-        finneeStc.dataset{m}.clusterAnalysis{end+1}.infoFunctionUsed...
-            .info = info;
-        finneeStc.dataset{m}.clusterAnalysis{end}.infoFunctionUsed...
-            .parameters = parameters ;
-        finneeStc.dataset{m}.clusterAnalysis{end}.infoFunctionUsed...
-            .error = {};
-        finneeStc.dataset{m}.clusterAnalysis{end}.description...
-            .dateOfCreation = clock;
-        
-        fidWriteDat = ...
-            fopen(finneeStc.dataset{m}.description.path2DatFile, 'ab');
+        finneeStc.dataset{m}.CA = {};
+        finneeStc.dataset{m}.CA{end+1}.name = ...
+            'Dierarchical agglomerative cluster analysis.';
+        finneeStc.dataset{m}.CA{end}.dateOfCreation = datetime;
+        finneeStc.dataset{m}.CA{end}.info = info;
+        finneeStc.dataset{m}.CA{end}.info.parameters = parameters ;
+        finneeStc.dataset{m}.CA{end}.info .error = {};
+
+        fidWriteDat = fopen(finneeStc.path2dat, 'ab');
         cl2add.step = {};
         for ii = 1:length(clusters.step)
             if options.display,
@@ -162,11 +152,10 @@ switch finneeStc.dataset{m}.description.dataFormat
             end
         end
         
-        finneeStc.dataset{m}.clusterAnalysis{end}.HStructure =...
-            cl2add;
+        finneeStc.dataset{m}.CA{end}.HStructure = cl2add;
         fclose(fidWriteDat);
-        save(fullfile(finneeStc.infoFunctionUsed.parameters.folderOut, ...
-            [finneeStc.infoFunctionUsed.parameters.fileID '.fin']), 'finneeStc', '-mat')
+        save(fullfile(finneeStc.info.parameters.folderOut, ...
+            [finneeStc.info.parameters.fileID '.mat']), 'finneeStc')
     otherwise
         error('the dataset should be ionic profile')
 end
@@ -181,12 +170,12 @@ function [parameters, options] = ...
     initFunction(narginIn, finneeStc, dataset, vararginIn )
 
 % defaults parameters
-parameters.minCC = 0.8;
+parameters.minCC = 0.9;
 parameters.maxPIP = 2000;
 parameters.PIPperCl = 2;
 options.display = 1;
 parameters.dataset = dataset;
-parameters.filter.on = 1;
+parameters.filter.on = 0;
 
 % 1.1. Check for obligatory parameters
 if narginIn < 2 % check the number of input parameters
@@ -214,9 +203,6 @@ if  narginIn > 2
             case 'minCorCoef'
                 parameters.minCC = vararginIn{SFi+1};
                 SFi = SFi + 2;
-            case 'minPIPperCluster'
-                parameters.minCC = vararginIn{SFi+1};
-                parameters.PIPperCl = SFi + 2;
             otherwise
                 error('myApp:argChk', ...
                     [vararginIn{SFi} ' is not a recognized PropertyName'])
