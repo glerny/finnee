@@ -1,4 +1,4 @@
-function [finneeStc, fom, MII] = getPIP2( finneeStc, dataset, intThresh, diffMass, ptsPerPeak, varargin)
+function [finneeStc, fom, MII] = getPIP( finneeStc, dataset, intThresh, diffMass, ptsPerPeak, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
 %   GETPIP allows to extract from a 'centroid spectrum' dataset pure ion profiles
