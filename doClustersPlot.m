@@ -90,23 +90,23 @@ fomClusters.label = {'clusterID' 'meanTmax' 'std' 'meanM1' 'std'...
     'massSIPmax' 'std' 'MassCentroid' 'IatSIPMax' 'sumI' 'sumArea'} ;
 fomClusters.data = [];
 
-figure
-PIPinClust = 0;
+clustersOut.title = ['Clusters @ HL = ', num2str(HL)] ;
+clustersOut.axeX = axeX;
+clustersOut.cluster = {};
 for ii = 1:length(selClusters)
-    
-    % Calculate SumSIPinCl
+    clustersOut.cluster{ii}.ionicProfile = {};
     sumPIPinCl = zeros(length(axeX), 1);
     for jj = 1:length(selClusters{ii})
         index = finneeStc.dataset{m}.indexInDat(selClusters{ii}(jj), :);
         fseek(fidReadDat, index(1), 'bof');
         PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
             index(3)], 'double');
+        clustersOut.cluster{ii}.ionicProfile{jj} = PIP;
         sumPIPinCl(PIP(:,1)) = sumPIPinCl(PIP(:,1)) + PIP(:,2);
     end
+    
     if max(fom.data(selClusters{ii}, 5)) >= parameters.minIntensity
-        PIPinClust = PIPinClust +  length(selClusters{ii});
         sumCluSIP = sumCluSIP + sumPIPinCl;
-        sumPIP = sumPIP + sumPIPinCl;
         fomClusters.data(end+1, 1) = ii;
         fomClusters.data(end, 2) = mean(fom.data(selClusters{ii}, 6));
         fomClusters.data(end, 3) = std(fom.data(selClusters{ii}, 6));
@@ -119,95 +119,91 @@ for ii = 1:length(selClusters)
         fomClusters.data(end, 9) = fom.data(selClusters{ii}(1), 5);
         fomClusters.data(end, 10) = sum(fom.data(selClusters{ii}, 5));
         fomClusters.data(end, 11) = sum(fom.data(selClusters{ii}, 7));
-        subplot(2,2,2)
-        hold on
-        plot(axeX, sumPIPinCl, 'k')
-        subplot(2,2,4)
-        hold on
-        plot(axeX,sumPIPinCl/max(sumPIPinCl), 'k')
-    else
-        sumPIP = sumPIP + sumPIPinCl;
     end
+    sumPIP = sumPIP + sumPIPinCl;
 end
 fclose(fidReadDat);
+clustersOut.FOM = fomClusters;
+clustersOut.trace{1} = [axeX sumCluSIP];
+clustersOut.trace{2} = [axeX sumPIP];
 
-subplot(2,2,1)
-plot(axeX, sumCluSIP, 'k')
-title('Sum of single ion profiles');
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-    finneeStc.dataset{m}.description.intUnit]);
-
-subplot(2,2,2)
-title('Most intensed PIP in each cluster');
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-    finneeStc.dataset{m}.description.intUnit]);
-hold off
-subplot(2,2,4)
-title('Most intensed PIP in each cluster (normalised intensities)');
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-    finneeStc.dataset{m}.description.intUnit]);
-hold off
-subplot(2,2,3)
-title('Residual all PIP - PIP in clusters');
-plot(axeX, sumPIP-sumCluSIP, 'r')
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-    finneeStc.dataset{m}.description.intUnit]);hold off
-
-% 4. CLUSTERS PLOT
-listMZ2plot3D = fomClusters.data(:,6);
-listI2plot3D =  fomClusters.data(:,9);
-listT2plot3D = fomClusters.data(:,2);
-figure('units','normalized','outerposition',[0 0 1 1], 'Name', ... % this does make it full size on my computer don't knwo why
-    ['3D display of HACBotUp of ', finneeStc.infoFunctionUsed.parameters.fileID, ' @ ',...
-    address, ' with deltaM1 <= ', num2str(parameters.HL), ...
-    ' repetition of motifs >= ' , num2str(parameters.minReptMotif), ...
-    ' and intenisty of clusters >= ', num2str(parameters.minIntensity)])
-
-subplot(5, 1, 1) % TICP using only pure ions profiles in clusters
-plot(axeX, sumCluSIP, 'k')
-title('Sum of single ion profiles');
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-    finneeStc.dataset{m}.description.intUnit]);
-v1 = axis;
-
-subplot(5,1, 2:5) % CLUSTERS PLOT
-codeSize = int32(listI2plot3D/max(listI2plot3D)*(500) + 5);
-hold on
-scatter(listT2plot3D, listMZ2plot3D, ...
-    codeSize, 'k');
-assignin('base', 'listT2plot3D', listT2plot3D)
-assignin('base', 'listMZ2plot3D', listMZ2plot3D)
-assignin('base', 'codeSize', codeSize)
-title('Clusters Plot');
-xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-    finneeStc.dataset{m}.description.timeUnit]);
-ylabel([finneeStc.dataset{m}.description.mzLabel,' / ', ...
-    finneeStc.dataset{m}.description.mzUnit]);
-v2 = axis;
-axis([v1(1) v1(2) v2(3) v2(4)])
-
-% DataOut is used by PLOTCLUSTER to analyse each cluster individually
-dataOut.results.path2DatFile = ...
-    finneeStc.dataset{m}.description.path2DatFile;
-dataOut.results.index2DotDat = ...
-    finneeStc.dataset{m }.description.index2DotDat;
-dataOut.results.axeX = axeX;
-dataOut.results.fom = fom;
-dataOut.results.fomClusters = fomClusters;
-dataOut.results.selClusters = selClusters;
-dataOut.results.formatSpec = formatSpec;
-dataOut.info = info;
-dataOut.parameters = parameters;
+% subplot(2,2,1)
+% plot(axeX, sumCluSIP, 'k')
+% title('Sum of single ion profiles');
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
+%     finneeStc.dataset{m}.description.intUnit]);
+% 
+% subplot(2,2,2)
+% title('Most intensed PIP in each cluster');
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
+%     finneeStc.dataset{m}.description.intUnit]);
+% hold off
+% subplot(2,2,4)
+% title('Most intensed PIP in each cluster (normalised intensities)');
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
+%     finneeStc.dataset{m}.description.intUnit]);
+% hold off
+% subplot(2,2,3)
+% title('Residual all PIP - PIP in clusters');
+% plot(axeX, sumPIP-sumCluSIP, 'r')
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
+%     finneeStc.dataset{m}.description.intUnit]);hold off
+% 
+% % 4. CLUSTERS PLOT
+% listMZ2plot3D = fomClusters.data(:,6);
+% listI2plot3D =  fomClusters.data(:,9);
+% listT2plot3D = fomClusters.data(:,2);
+% figure('units','normalized','outerposition',[0 0 1 1], 'Name', ... % this does make it full size on my computer don't knwo why
+%     ['3D display of HACBotUp of ', finneeStc.infoFunctionUsed.parameters.fileID, ' @ ',...
+%     address, ' with deltaM1 <= ', num2str(parameters.HL), ...
+%     ' repetition of motifs >= ' , num2str(parameters.minReptMotif), ...
+%     ' and intenisty of clusters >= ', num2str(parameters.minIntensity)])
+% 
+% subplot(5, 1, 1) % TICP using only pure ions profiles in clusters
+% plot(axeX, sumCluSIP, 'k')
+% title('Sum of single ion profiles');
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
+%     finneeStc.dataset{m}.description.intUnit]);
+% v1 = axis;
+% 
+% subplot(5,1, 2:5) % CLUSTERS PLOT
+% codeSize = int32(listI2plot3D/max(listI2plot3D)*(500) + 5);
+% hold on
+% scatter(listT2plot3D, listMZ2plot3D, ...
+%     codeSize, 'k');
+% assignin('base', 'listT2plot3D', listT2plot3D)
+% assignin('base', 'listMZ2plot3D', listMZ2plot3D)
+% assignin('base', 'codeSize', codeSize)
+% title('Clusters Plot');
+% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
+%     finneeStc.dataset{m}.description.timeUnit]);
+% ylabel([finneeStc.dataset{m}.description.mzLabel,' / ', ...
+%     finneeStc.dataset{m}.description.mzUnit]);
+% v2 = axis;
+% axis([v1(1) v1(2) v2(3) v2(4)])
+% 
+% % DataOut is used by PLOTCLUSTER to analyse each cluster individually
+% dataOut.results.path2DatFile = ...
+%     finneeStc.dataset{m}.description.path2DatFile;
+% dataOut.results.index2DotDat = ...
+%     finneeStc.dataset{m }.description.index2DotDat;
+% dataOut.results.axeX = axeX;
+% dataOut.results.fom = fom;
+% dataOut.results.fomClusters = fomClusters;
+% dataOut.results.selClusters = selClusters;
+% dataOut.results.formatSpec = formatSpec;
+% dataOut.info = info;
+% dataOut.parameters = parameters;
         
 %% NESTED FUNCTIONS
 end
