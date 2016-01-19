@@ -91,11 +91,13 @@ fomClusters.label = {'clusterID' 'meanTmax' 'std' 'meanM1' 'std'...
 fomClusters.data = [];
 
 clustersOut.title = ['Clusters @ HL = ', num2str(HL)] ;
-clustersOut.axeX = axeX;
+clustersOut.axes = finneeStc.dataset{m}.axes;
+clustersOut.prec4mz = finneeStc.info.parameters.prec4mz;
 clustersOut.cluster = {};
 for ii = 1:length(selClusters)
     clustersOut.cluster{ii}.ionicProfile = {};
     sumPIPinCl = zeros(length(axeX), 1);
+    maxInt = 0;
     for jj = 1:length(selClusters{ii})
         index = finneeStc.dataset{m}.indexInDat(selClusters{ii}(jj), :);
         fseek(fidReadDat, index(1), 'bof');
@@ -103,9 +105,10 @@ for ii = 1:length(selClusters)
             index(3)], 'double');
         clustersOut.cluster{ii}.ionicProfile{jj} = PIP;
         sumPIPinCl(PIP(:,1)) = sumPIPinCl(PIP(:,1)) + PIP(:,2);
+        if maxInt < max(PIP(:,2)), maxInt =  max(PIP(:,2)); end
     end
     
-    if max(fom.data(selClusters{ii}, 5)) >= parameters.minIntensity
+    if maxInt >= parameters.minIntensity
         sumCluSIP = sumCluSIP + sumPIPinCl;
         fomClusters.data(end+1, 1) = ii;
         fomClusters.data(end, 2) = mean(fom.data(selClusters{ii}, 6));
@@ -124,86 +127,65 @@ for ii = 1:length(selClusters)
 end
 fclose(fidReadDat);
 clustersOut.FOM = fomClusters;
-clustersOut.trace{1} = [axeX sumCluSIP];
-clustersOut.trace{2} = [axeX sumPIP];
 
-% subplot(2,2,1)
-% plot(axeX, sumCluSIP, 'k')
-% title('Sum of single ion profiles');
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-%     finneeStc.dataset{m}.description.intUnit]);
-% 
-% subplot(2,2,2)
-% title('Most intensed PIP in each cluster');
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-%     finneeStc.dataset{m}.description.intUnit]);
-% hold off
-% subplot(2,2,4)
-% title('Most intensed PIP in each cluster (normalised intensities)');
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-%     finneeStc.dataset{m}.description.intUnit]);
-% hold off
-% subplot(2,2,3)
-% title('Residual all PIP - PIP in clusters');
-% plot(axeX, sumPIP-sumCluSIP, 'r')
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-%     finneeStc.dataset{m}.description.intUnit]);hold off
-% 
-% % 4. CLUSTERS PLOT
-% listMZ2plot3D = fomClusters.data(:,6);
-% listI2plot3D =  fomClusters.data(:,9);
-% listT2plot3D = fomClusters.data(:,2);
-% figure('units','normalized','outerposition',[0 0 1 1], 'Name', ... % this does make it full size on my computer don't knwo why
-%     ['3D display of HACBotUp of ', finneeStc.infoFunctionUsed.parameters.fileID, ' @ ',...
-%     address, ' with deltaM1 <= ', num2str(parameters.HL), ...
-%     ' repetition of motifs >= ' , num2str(parameters.minReptMotif), ...
-%     ' and intenisty of clusters >= ', num2str(parameters.minIntensity)])
-% 
-% subplot(5, 1, 1) % TICP using only pure ions profiles in clusters
-% plot(axeX, sumCluSIP, 'k')
-% title('Sum of single ion profiles');
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.intLabel,' / ', ...
-%     finneeStc.dataset{m}.description.intUnit]);
-% v1 = axis;
-% 
-% subplot(5,1, 2:5) % CLUSTERS PLOT
-% codeSize = int32(listI2plot3D/max(listI2plot3D)*(500) + 5);
-% hold on
-% scatter(listT2plot3D, listMZ2plot3D, ...
-%     codeSize, 'k');
-% assignin('base', 'listT2plot3D', listT2plot3D)
-% assignin('base', 'listMZ2plot3D', listMZ2plot3D)
-% assignin('base', 'codeSize', codeSize)
-% title('Clusters Plot');
-% xlabel([finneeStc.dataset{m}.description.timeLabel,' / ', ...
-%     finneeStc.dataset{m}.description.timeUnit]);
-% ylabel([finneeStc.dataset{m}.description.mzLabel,' / ', ...
-%     finneeStc.dataset{m}.description.mzUnit]);
-% v2 = axis;
-% axis([v1(1) v1(2) v2(3) v2(4)])
-% 
-% % DataOut is used by PLOTCLUSTER to analyse each cluster individually
-% dataOut.results.path2DatFile = ...
-%     finneeStc.dataset{m}.description.path2DatFile;
-% dataOut.results.index2DotDat = ...
-%     finneeStc.dataset{m }.description.index2DotDat;
-% dataOut.results.axeX = axeX;
-% dataOut.results.fom = fom;
-% dataOut.results.fomClusters = fomClusters;
-% dataOut.results.selClusters = selClusters;
-% dataOut.results.formatSpec = formatSpec;
-% dataOut.info = info;
-% dataOut.parameters = parameters;
+timeLabel = finneeStc.dataset{m}.axes.time.label;
+timeUnit = finneeStc.dataset{m}.axes.time.unit;
+mzLabel = finneeStc.dataset{m}.axes.mz.label;
+mzUnit = finneeStc.dataset{m}.axes.mz.unit;
+intLabel = finneeStc.dataset{m}.axes.intensity.label;
+intUnit = finneeStc.dataset{m}.axes.intensity.unit;
+
+clustersOut.trace{1}.title = 'Sum final profiles in clusters';
+clustersOut.trace{1}.data = [axeX sumPIP];
+clustersOut.trace{1}.dateOfCreation = datetime;
+clustersOut.trace{1}.plotType = 'profile';
+clustersOut.trace{1}.axeX.label = timeLabel;
+clustersOut.trace{1}.axeX.unit = timeUnit;
+clustersOut.trace{1}.axeY.label = intLabel;
+clustersOut.trace{1}.axeY.unit = intUnit;
+
+clustersOut.trace{2}.title =['Sum profiles in clusters with intensity >'...
+    num2str(minInt)];
+clustersOut.trace{2}.data = [axeX sumCluSIP];
+clustersOut.trace{2}.dateOfCreation = datetime;
+clustersOut.trace{2}.plotType = 'profile';
+clustersOut.trace{2}.axeX.label = timeLabel;
+clustersOut.trace{2}.axeX.unit = timeUnit;
+clustersOut.trace{2}.axeY.label = intLabel;
+clustersOut.trace{2}.axeY.unit = intUnit;
+
+% 4. CLUSTERS PLOT
+listMZ2plot3D = fomClusters.data(:,6);
+listI2plot3D =  fomClusters.data(:,9);
+listT2plot3D = fomClusters.data(:,2);
+figure('units','normalized','outerposition',[0 0 1 1], 'Name', ... % this does make it full size on my computer don't knwo why
+    ['Clusters plots of ',finneeStc.info.parameters.fileID, ' @ ',...
+    address, ' with HL = ', num2str(parameters.HL), ...
+    ' and intenisty of clusters >= ', num2str(parameters.minIntensity)])
+
+subplot(5,1,1)
+plot(axeX, sumPIP, 'k')
+hold on
+plot(axeX, sumCluSIP, 'r')
+hold off
+legend('all clusters', ['clust. int. > ', num2str(minInt)])  
+title('Sum of profiles in clusters');
+xlabel([timeLabel,' / ', timeUnit]);
+ylabel([intLabel,' / ', intUnit]);
+v1 = axis;
+
+subplot(5,1, 2:5) % CLUSTERS PLOT
+codeSize = int32(listI2plot3D/max(listI2plot3D)*(500) + 5);
+hold on
+scatter(listT2plot3D, listMZ2plot3D, ...
+    codeSize, 'k');
+title('Clusters Plot');
+xlabel([timeLabel,' / ', timeUnit]);
+ylabel([mzLabel,' / ', mzUnit]);
+v2 = axis;
+axis([v1(1) v1(2) v2(3) v2(4)])
+hold off
+
         
 %% NESTED FUNCTIONS
 end
