@@ -102,7 +102,7 @@ results.FOM.label = clustersIn.FOM.label;
 results.FOM.data = fomClusters(targetInd, :);
 results.MS = MS;
 fprintf('\n\tTime at peak maxima: \t\t%.2f \n', fomClusters(targetInd, 2))
-fprintf('\tMaximum intensity: \t%.0f \n', fomClusters(targetInd, 6))
+fprintf('\tMaximum intensity: \t%.0f \n', fomClusters(targetInd, 9))
 fprintf('\tSum of max intensities: \t%.0f \n', fomClusters(targetInd, 10))
 fprintf('\tSum of PIP areas: \t\t\t%.0f \n\n', fomClusters(targetInd, 11))
 fprintf('\t AcuMass \t std \t Intensity \t corr2clustP\n\n')
