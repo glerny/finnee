@@ -572,7 +572,7 @@ parameters.xMax = inf;
 parameters.test = 0;
 options.text = 1;
 options.save = 1;
-parameters.concat.do = 1;
+parameters.concat.do = 0; %SET TO ZERO THIS PART IS BUGED DOUBLED SOME PROFILES
 parameters.concat.tdis = [1, 12.71; 2, 4.30; 3, 3.18; 4, 2.78; 5, 2.57; ...
     6, 2.45; 7, 2.36; 8, 2.31; 9, 2.26; 10, 2.23; 12, 2.18; 14, 2.14; ...
     16, 2.12; 18, 2.10; 20, 2.09; 30, 2.04; 50, 2.01];
