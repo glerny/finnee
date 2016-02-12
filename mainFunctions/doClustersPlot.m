@@ -186,6 +186,11 @@ v2 = axis;
 axis([v1(1) v1(2) v2(3) v2(4)])
 hold off
 
+clustersOut.plot.x.value = listT2plot3D;
+clustersOut.plot.x.label = [timeLabel,' / ', timeUnit];
+clustersOut.plot.y.value = listMZ2plot3D;
+clustersOut.plot.y.label = [mzLabel,' / ', mzUnit];
+clustersOut.plot.z.value = codeSize;
         
 %% NESTED FUNCTIONS
 end
