@@ -49,6 +49,7 @@ info.function.matlabVersion = '8.5.0.197613 (R2015a)';
 info.function.version = '12/01/2016';
 info.function.ownerContact = 'guillaume.erny@finnee.com';
 finneeStc.info = info;
+warning('off','all')
 
 % INITFUNCTION is used to test the entries, load the target MS dataset and
 % load the default values
@@ -273,6 +274,7 @@ while ~strcmp(LDR.label, '/run')
 end
 axeX(data2keep == 0) = [];
 fclose(fidRead);
+warning('on','all')
 
 % 5. CONCLUSIONS AND DATA RECORDING
 save2struc()
