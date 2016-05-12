@@ -242,9 +242,6 @@ while ~strcmp(LDR.label, '/run')
                     mzValue > finneeStc.info.parameters.mzMax;
                 mzValue(ind2rem) = [];
                 intValue(ind2rem) = [];
-                if strcmp(datasetType, 'centroid spectrum')
-                    mzValue = round(mzValue*10^decimals)/10^decimals;
-                end
                 
                 % calculates profiles and limits
                 if mzMin > min(mzValue), mzMin = min(mzValue); end
