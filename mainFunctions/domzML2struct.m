@@ -20,14 +20,8 @@ function finneeStc = domzML2struct(varargin)
 %       within the function
 %
 %   .optional VARARGIN acepts the following values
-%       'tMin:Max'  followed by a 2x1 array (i.e. [5 10]) to set the  time 
-%           interval (default is (0 inf))
-%       'MZMin:Max' followed by a 2x1 array (i.e. [300 1000]) to set the MZ 
-%           interval (default is (0 inf))
 %       'dispOff'   remove all display text in the Matlab command window.
 %       'overwrite' Overwrite potentially existing files
-%       'precision' followed by an integer, number of decimal to used when
-%           displaying m/z values (default 4)
 %
 % 3. OUTPUT PARAMETERS
 %   .finneeStc 
@@ -80,6 +74,9 @@ while ~strcmp(LDR.label, 'run')
     if strcmp(LDR.label, '?xml')
         finneeStc.mzML.xml.attributes = LDR.attributes;
         finneeStc.mzML.xml.text = LDR.text;
+    elseif strcmp(LDR.label, 'indexedmzML')
+        finneeStc.mzML.indexedmzML.attributes = LDR.attributes;
+        finneeStc.mzML.indexedmzML.text = LDR.text;
     elseif strcmp(LDR.label, 'mzML')
         finneeStc.mzML.mzML.attributes = LDR.attributes;
         finneeStc.mzML.mzML.text = LDR.text;
@@ -93,11 +90,12 @@ while ~strcmp(LDR.label, 'run')
              'The mzML file is not complete')
     end
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
+    assignin('base', 'mzML', finneeStc.mzML)
 end
 finneeStc.mzML.run.attributes = LDR.attributes;
 finneeStc.mzML.run.text = LDR.text;
 
-% 3. CHECK FIRTH SCAN FOR MISSING INOFRMATION
+% 3. CHECK FIRST SCAN FOR MISSING INOFRMATION
 
 % Get dataset axesLabel and axesUnit by processing the first scan
 % Initialisation and default values
@@ -106,13 +104,18 @@ mzUnit = ''; intLabel = 'Intensity'; intUnit = '';
 [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);  
 axeX = []; TICP = [];  BPP = []; mzBPP = []; MSIndex = []; data2keep = [];
 compression = ''; dataFormat = ''; 
-datasetType = finneeStc.mzML.fileDescription.fileContent{1}.cvParam{2}.attributes{3}.field{1}; % recover datasettype (i.e. s centroid of profilerom mzML info)
-curLine = fgetl(fidRead);
+keptPl = ftell(fidRead)
+curLine = fgetl(fidRead)
 [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 if options.display
     disp('processing scan 1 out of ???')
 end
 boolArray = 1;
+
+% MODIDICATION 16/05/2016 FOR  datasetType = 'profile spectrum';
+% SCAN WHOLE DATASET TO GENERATE mzAxe 
+%record position where run start
+
 while ~strcmp(LDR.label, '/spectrum')
     if strcmp(LDR.label, 'spectrumList')
         [bool, ~, provField] = fieldfind( LDR.attributes, 'count');
@@ -126,6 +129,10 @@ while ~strcmp(LDR.label, '/spectrum')
         [bool, ~, field] = fieldfind( LDR.attributes, 'accession');
         if bool
             switch field{1}
+                case 'MS:1000127'
+                    datasetType = 'centroid spectrum';
+                case 'MS:1000128'
+                    datasetType = 'profile spectrum';
                 case 'MS:1000016'
                     [~, ~, provField] = fieldfind( LDR.attributes, 'value');
                     axeX(end+1) = str2double(provField{1});
@@ -142,11 +149,29 @@ while ~strcmp(LDR.label, '/spectrum')
                     [~, ~, provField] = fieldfind( LDR.attributes, 'unitName');
                     intUnit = provField{1};
             end
+        end             
+    end
+    curLine = fgetl(fidRead);
+    if ~ischar(curLine)
+         error('myApp:endOfFile', ...
+             'The mzML file is not complete')
+    end
+    [LDR, curLine] = getMZMLCamp(curLine, fidRead);
+end
+
+fseek(fidRead, keptPl, 'bof') % Go back at the start of the spectrumList
+curLine = fgetl(fidRead);
+
+if strcmp(datasetType, 'profile spectrum')
+    axeMZ = [];
+    count = 1;
+    while ~strcmp(LDR.label, '/run') && count <= scanCount
+        if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
+        if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
+            [~, ~, field] = fieldfind( LDR.attributes, 'accession');
+            
         end
-    elseif strcmp(LDR.label, 'binary')
-        if axeX(end) >= finneeStc.info.parameters.xMin && ...
-                axeX(end) <= finneeStc.info.parameters.xMax
-            data2keep(end+1) = 1;
+        if strcmp(LDR.label, 'binary')
             input = LDR.text;
             switch dataFormat
                 case 'MS:1000523'
@@ -160,48 +185,40 @@ while ~strcmp(LDR.label, '/spectrum')
                 otherwise
                     error('compression not recognized')
             end
-            output = typecast(uint8(output),'double');
+            output= typecast(uint8(output),'double');
             if boolArray
                 boolArray = 0;
                 mzValue = output;
+                if options.display
+                    disp(['Checking the m/z axe ', num2str(count), ...
+                        ' out of ', num2str(scanCount)])
+                end
+                axeMZ = unique([axeMZ, round(mzValue, 4)]);
             else
                 boolArray = 1;
                 intValue = output;
-                ind2rem = mzValue < finneeStc.info.parameters.mzMin | ...
-                    mzValue > finneeStc.info.parameters.mzMax;
-                mzValue(ind2rem) = [];
-                intValue(ind2rem) = [];
-                
-                % calculates profiles and limits
-                if mzMin > min(mzValue), mzMin = min(mzValue); end
-                if mzMax < max(mzValue), mzMax = max(mzValue); end
-                if intMin > min(intValue), intMin = min(intValue); end
-                if intMax < max(intValue), intMax = max(intValue); end
-                TICP(end+1) = sum(intValue);
-                [BPP(end+1), indMax] = max(intValue);
-                mzBPP(end+1) = mzValue(indMax);
-                
-                % write 
-                posIni =  ftell(fidWriteDat);
-                fwrite(fidWriteDat, ...
-                    [mzValue intValue], 'double');
-                MSIndex = [MSIndex; [posIni, ftell(fidWriteDat), 2]];
+                count = count + 1;
             end
         else
-            data2keep(end+1) = 0;
         end
-                        
+        
+        
+        curLine = fgetl(fidRead);
+        if ~ischar(curLine)
+            error('myApp:endOfFile', ...
+                'The mzML file is not complete')
+        end
+        [LDR, curLine] = getMZMLCamp(curLine, fidRead);
     end
-    curLine = fgetl(fidRead);
-    if ~ischar(curLine)
-         error('myApp:endOfFile', ...
-             'The mzML file is not complete')
-    end
-    [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 end
 
+
+
+fseek(fidRead, keptPl, 'bof') % Go back at the start of the spectrumList
+curLine = fgetl(fidRead);
+
 % 4. EXTRACT DATA FOR EACH SCAN
-while ~strcmp(LDR.label, '/run')
+while ~strcmp(LDR.label, '/run') 
     if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
     if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
         [~, ~, field] = fieldfind( LDR.attributes, 'accession');
@@ -215,6 +232,7 @@ while ~strcmp(LDR.label, '/run')
         end
     end
     if strcmp(LDR.label, 'binary')
+        if length(TICP) == scanCount, break; end
         if axeX(end) >= finneeStc.info.parameters.xMin && ...
                 axeX(end) <= finneeStc.info.parameters.xMax
             data2keep(end+1) = 1;
@@ -238,23 +256,30 @@ while ~strcmp(LDR.label, '/run')
             else
                 boolArray = 1;
                 intValue = output;
-                ind2rem = mzValue < finneeStc.info.parameters.mzMin | ...
-                    mzValue > finneeStc.info.parameters.mzMax;
-                mzValue(ind2rem) = [];
-                intValue(ind2rem) = [];
+                
+                MS =  [mzValue' intValue'];
+                if strcmp(datasetType, 'profile spectrum')
+                    MS_new = axeMZ';
+                    MS_new(:,2) = 0;
+                    Lia = ismember(axeMZ, round(MS(:,1), 4));
+                    assignin('base', 'axeMZ', axeMZ)
+                    assignin('base', 'MS', MS)
+                    MS_new(Lia, 2) = MS(:,2);
+                    MS = MS_new;
+                end
                 
                 % calculates profiles and limits
-                if mzMin > min(mzValue), mzMin = min(mzValue); end
-                if mzMax < max(mzValue), mzMax = max(mzValue); end
-                if intMin > min(intValue), intMin = min(intValue); end
-                if intMax < max(intValue), intMax = max(intValue); end
-                TICP(end+1) = sum(intValue);
-                [BPP(end+1), indMax] = max(intValue);
-                mzBPP(end+1) = mzValue(indMax);
+                if mzMin > min(MS(:,1)), mzMin = min(MS(:,1)); end
+                if mzMax < max(MS(:,1)), mzMax = max(MS(:,1)); end
+                if intMin > min(MS(:,2)), intMin = min(MS(:,2)); end
+                if intMax < max(MS(:,2)), intMax = max(MS(:,2)); end
+                TICP(end+1) = sum(MS(:,2));
+                [BPP(end+1), indMax] = max(MS(:,2));
+                mzBPP(end+1) = MS(indMax, 2);
                 % write
                 posIni =  ftell(fidWriteDat);
                 fwrite(fidWriteDat, ...
-                    [mzValue intValue], 'double');
+                    MS, 'double');
                 MSIndex = [MSIndex; [posIni, ftell(fidWriteDat), 2]];
             end
         else
@@ -291,9 +316,8 @@ fclose(fidWriteDat);
             endLabel = ['/', LDR.label];
             parentLabel = LDR.label;
             while 1
-                curLine = fgetl(fidRead);
+                curLine = fgetl(fidRead)
                 [LDR, ~] = getMZMLCamp(curLine, fidRead);
-                LDR.label
                 if strcmp(endLabel, LDR.label)
                     break
                 end
@@ -301,6 +325,8 @@ fclose(fidWriteDat);
                     outStrc.(parentLabel).(LDR.label) = {};
                 end
                 s = addChildNode(LDR);
+                
+                assignin('base', 's', s)
                 outStrc.(parentLabel).(LDR.label){end+1} = s.(LDR.label);
             end
         end
@@ -347,7 +373,13 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{1}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{1}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{1}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX' TICP'], 'double');
+    assignin('base', 'axeX', axeX)
+    assignin('base', 'TICP', TICP)
+    % WITH msconvert and agilent TICP is longer than axeX in the last
+    % scan??? Correction add for this case
+    % fwrite(fidWriteDat, [axeX' TICP'], 'double');
+    indEnd = min(length(axeX), length(TICP));
+    fwrite(fidWriteDat, [axeX(1:indEnd)' TICP(1:indEnd)'], 'double');
     finneeStc.dataset{1}.trace{1}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** BPP
@@ -360,7 +392,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{2}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{2}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{2}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX' BPP'], 'double');
+    fwrite(fidWriteDat, [axeX(1:indEnd)' BPP(1:indEnd)'], 'double');
     finneeStc.dataset{1}.trace{2}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** mzBPP
@@ -373,7 +405,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{3}.axeY.label = mzLabel;
     finneeStc.dataset{1}.trace{3}.axeY.unit = mzUnit;
     finneeStc.dataset{1}.trace{3}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX' mzBPP'], 'double');
+    fwrite(fidWriteDat, [axeX(1:indEnd)' mzBPP(1:indEnd)'], 'double');
     finneeStc.dataset{1}.trace{3}.indexInDat(2) = ftell(fidWriteDat);
     end
 end
