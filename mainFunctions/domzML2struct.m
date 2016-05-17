@@ -226,7 +226,6 @@ while count <= scanCount
         end
     end
     if strcmp(LDR.label, 'binary')
-        if length(TICP) == scanCount, break; end
         if axeX(count) >= finneeStc.info.parameters.xMin && ...
                 axeX(count) <= finneeStc.info.parameters.xMax
             data2keep(count) = 1;
@@ -273,7 +272,7 @@ while count <= scanCount
                 fwrite(fidWriteDat, ...
                     MS, 'double');
                 MSIndex(count,:) = [posIni, ftell(fidWriteDat), 2];
-                count = count + 1;
+                count = count + 1
             end
         end
     end
