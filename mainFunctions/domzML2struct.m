@@ -43,7 +43,6 @@ info.function.matlabVersion = '8.5.0.197613 (R2015a)';
 info.function.version = '12/01/2016';
 info.function.ownerContact = 'guillaume.erny@finnee.com';
 finneeStc.info = info;
-warning('off','all')
 
 % INITFUNCTION is used to test the entries, load the target MS dataset and
 % load the default values
@@ -102,10 +101,9 @@ finneeStc.mzML.run.text = LDR.text;
 timeLabel = 'Time'; timeUnit = ''; mzLabel = 'Mass';
 mzUnit = ''; intLabel = 'Intensity'; intUnit = '';
 [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);  
-axeX = []; TICP = [];  BPP = []; mzBPP = []; MSIndex = []; data2keep = [];
 compression = ''; dataFormat = ''; 
-keptPl = ftell(fidRead)
-curLine = fgetl(fidRead)
+keptPl = ftell(fidRead);
+curLine = fgetl(fidRead);
 [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 if options.display
     disp('processing scan 1 out of ???')
@@ -122,8 +120,7 @@ while ~strcmp(LDR.label, '/spectrum')
         if bool
             scanCount = str2double(provField{1});
         else
-            scanCount = 0;
-            errors{end+1} = 'attribute count not present in tag spectrumList';
+            error('attribute count not present in tag spectrumList');
         end
     elseif strcmp(LDR.label, 'cvParam')
         [bool, ~, field] = fieldfind( LDR.attributes, 'accession');
@@ -134,8 +131,6 @@ while ~strcmp(LDR.label, '/spectrum')
                 case 'MS:1000128'
                     datasetType = 'profile spectrum';
                 case 'MS:1000016'
-                    [~, ~, provField] = fieldfind( LDR.attributes, 'value');
-                    axeX(end+1) = str2double(provField{1});
                     [~, ~, provField] = fieldfind( LDR.attributes, 'unitName');
                     timeUnit = provField{1};
                 case 'MS:1000574'
@@ -159,7 +154,7 @@ while ~strcmp(LDR.label, '/spectrum')
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 end
 
-fseek(fidRead, keptPl, 'bof') % Go back at the start of the spectrumList
+fseek(fidRead, keptPl, 'bof'); % Go back at the start of the spectrumList
 curLine = fgetl(fidRead);
 
 if strcmp(datasetType, 'profile spectrum')
@@ -167,10 +162,6 @@ if strcmp(datasetType, 'profile spectrum')
     count = 1;
     while ~strcmp(LDR.label, '/run') && count <= scanCount
         if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
-        if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
-            [~, ~, field] = fieldfind( LDR.attributes, 'accession');
-            
-        end
         if strcmp(LDR.label, 'binary')
             input = LDR.text;
             switch dataFormat
@@ -196,7 +187,6 @@ if strcmp(datasetType, 'profile spectrum')
                 axeMZ = unique([axeMZ, round(mzValue, 4)]);
             else
                 boolArray = 1;
-                intValue = output;
                 count = count + 1;
             end
         else
@@ -214,28 +204,32 @@ end
 
 
 
-fseek(fidRead, keptPl, 'bof') % Go back at the start of the spectrumList
+fseek(fidRead, keptPl, 'bof'); % Go back at the start of the spectrumList
 curLine = fgetl(fidRead);
 
+[axeX, TICP, BPP, mzBPP, MSIndex, data2keep] = deal(zeros(scanCount, 1));
+MSIndex = zeros(scanCount, 3);
+
+count = 1;
 % 4. EXTRACT DATA FOR EACH SCAN
-while ~strcmp(LDR.label, '/run') 
+while count <= scanCount
     if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
     if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
         [~, ~, field] = fieldfind( LDR.attributes, 'accession');
         if strcmp(field{1}, 'MS:1000016')
             [~, ~, provField] = fieldfind( LDR.attributes, 'value');
-            axeX(end+1) = str2double(provField{1});
+            axeX(count) = str2double(provField{1});
             if options.display
-                disp(['processing scan ', num2str(length(axeX)), ...
+                disp(['processing scan ', num2str(count), ...
                     ' out of ', num2str(scanCount)])
             end
         end
     end
     if strcmp(LDR.label, 'binary')
         if length(TICP) == scanCount, break; end
-        if axeX(end) >= finneeStc.info.parameters.xMin && ...
-                axeX(end) <= finneeStc.info.parameters.xMax
-            data2keep(end+1) = 1;
+        if axeX(count) >= finneeStc.info.parameters.xMin && ...
+                axeX(count) <= finneeStc.info.parameters.xMax
+            data2keep(count) = 1;
             input = LDR.text;
             switch dataFormat
                 case 'MS:1000523'
@@ -262,8 +256,6 @@ while ~strcmp(LDR.label, '/run')
                     MS_new = axeMZ';
                     MS_new(:,2) = 0;
                     Lia = ismember(axeMZ, round(MS(:,1), 4));
-                    assignin('base', 'axeMZ', axeMZ)
-                    assignin('base', 'MS', MS)
                     MS_new(Lia, 2) = MS(:,2);
                     MS = MS_new;
                 end
@@ -273,17 +265,16 @@ while ~strcmp(LDR.label, '/run')
                 if mzMax < max(MS(:,1)), mzMax = max(MS(:,1)); end
                 if intMin > min(MS(:,2)), intMin = min(MS(:,2)); end
                 if intMax < max(MS(:,2)), intMax = max(MS(:,2)); end
-                TICP(end+1) = sum(MS(:,2));
-                [BPP(end+1), indMax] = max(MS(:,2));
-                mzBPP(end+1) = MS(indMax, 2);
+                TICP(count) = sum(MS(:,2));
+                [BPP(count), indMax] = max(MS(:,2));
+                mzBPP(count) = MS(indMax, 2);
                 % write
                 posIni =  ftell(fidWriteDat);
                 fwrite(fidWriteDat, ...
                     MS, 'double');
-                MSIndex = [MSIndex; [posIni, ftell(fidWriteDat), 2]];
+                MSIndex(count,:) = [posIni, ftell(fidWriteDat), 2];
+                count = count + 1;
             end
-        else
-            data2keep(end+1) = 0;
         end
     end
     
@@ -294,9 +285,8 @@ while ~strcmp(LDR.label, '/run')
     end
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
 end
-axeX(data2keep == 0) = [];
+
 fclose(fidRead);
-warning('on','all')
 
 % 5. CONCLUSIONS AND DATA RECORDING
 save2struc()
@@ -316,7 +306,7 @@ fclose(fidWriteDat);
             endLabel = ['/', LDR.label];
             parentLabel = LDR.label;
             while 1
-                curLine = fgetl(fidRead)
+                curLine = fgetl(fidRead);
                 [LDR, ~] = getMZMLCamp(curLine, fidRead);
                 if strcmp(endLabel, LDR.label)
                     break
@@ -378,8 +368,7 @@ fclose(fidWriteDat);
     % WITH msconvert and agilent TICP is longer than axeX in the last
     % scan??? Correction add for this case
     % fwrite(fidWriteDat, [axeX' TICP'], 'double');
-    indEnd = min(length(axeX), length(TICP));
-    fwrite(fidWriteDat, [axeX(1:indEnd)' TICP(1:indEnd)'], 'double');
+    fwrite(fidWriteDat, [axeX TICP], 'double');
     finneeStc.dataset{1}.trace{1}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** BPP
@@ -392,7 +381,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{2}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{2}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{2}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX(1:indEnd)' BPP(1:indEnd)'], 'double');
+    fwrite(fidWriteDat, [axeX BPP], 'double');
     finneeStc.dataset{1}.trace{2}.indexInDat(2) = ftell(fidWriteDat);
     
     % ** mzBPP
@@ -405,7 +394,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{3}.axeY.label = mzLabel;
     finneeStc.dataset{1}.trace{3}.axeY.unit = mzUnit;
     finneeStc.dataset{1}.trace{3}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    fwrite(fidWriteDat, [axeX(1:indEnd)' mzBPP(1:indEnd)'], 'double');
+    fwrite(fidWriteDat, [axeX mzBPP], 'double');
     finneeStc.dataset{1}.trace{3}.indexInDat(2) = ftell(fidWriteDat);
     end
 end

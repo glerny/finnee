@@ -27,81 +27,80 @@ function y = base64decode(x)
 %   E-mail:      pjacklam@online.no
 %   URL:         http://home.online.no/~pjacklam
 
-   % check number of input arguments
-   error(nargchk(1, 1, nargin));
-
+% check number of input arguments
+narginchk(1,1)
 %   remove non-base64 chars
-   x = x (   ( 'A' <= x & x <= 'Z' ) ...
-           | ( 'a' <= x & x <= 'z' ) ...
-           | ( '0' <= x & x <= '9' ) ...
-           | ( x == '+' ) | ( x == '=' ) | ( x == '/' ) );
+x = x (   ( 'A' <= x & x <= 'Z' ) ...
+    | ( 'a' <= x & x <= 'z' ) ...
+    | ( '0' <= x & x <= '9' ) ...
+    | ( x == '+' ) | ( x == '=' ) | ( x == '/' ) );
 
 
 if rem(length(x), 4)
-      warning('Length of base64 data not a multiple of 4; padding input.');
-   end
+    warning('Length of base64 data not a multiple of 4; padding input.');
+end
 
-   k = find(x == '=');
-   if ~isempty(k)
-      x = x(1:k(1)-1);
-   end
+k = find(x == '=');
+if ~isempty(k)
+    x = x(1:k(1)-1);
+end
 
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   % Now perform the following mapping
-   %
-   %   A-Z  ->  0  - 25
-   %   a-z  ->  26 - 51
-   %   0-9  ->  52 - 61
-   %   +    ->  62
-   %   /    ->  63
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Now perform the following mapping
+%
+%   A-Z  ->  0  - 25
+%   a-z  ->  26 - 51
+%   0-9  ->  52 - 61
+%   +    ->  62
+%   /    ->  63
 
-   y = repmat(uint8(0), size(x));
-   i = 'A' <= x & x <= 'Z'; y(i) =    - 'A' + x(i);
-   i = 'a' <= x & x <= 'z'; y(i) = 26 - 'a' + x(i);
-   i = '0' <= x & x <= '9'; y(i) = 52 - '0' + x(i);
-   i =            x == '+'; y(i) = 62 - '+' + x(i);
-   i =            x == '/'; y(i) = 63 - '/' + x(i);
-   x = y;
+y = repmat(uint8(0), size(x));
+i = 'A' <= x & x <= 'Z'; y(i) =    - 'A' + x(i);
+i = 'a' <= x & x <= 'z'; y(i) = 26 - 'a' + x(i);
+i = '0' <= x & x <= '9'; y(i) = 52 - '0' + x(i);
+i =            x == '+'; y(i) = 62 - '+' + x(i);
+i =            x == '/'; y(i) = 63 - '/' + x(i);
+x = y;
 
-   nebytes = length(x);         % number of encoded bytes
-   nchunks = ceil(nebytes/4);   % number of chunks/groups
+nebytes = length(x);         % number of encoded bytes
+nchunks = ceil(nebytes/4);   % number of chunks/groups
 
-   % add padding if necessary
-   if rem(nebytes, 4)
-      x(end+1 : 4*nchunks) = 0;
-   end
+% add padding if necessary
+if rem(nebytes, 4)
+    x(end+1 : 4*nchunks) = 0;
+end
 
-   x = reshape(uint8(x), 4, nchunks);
-   y = repmat(uint8(0), 3, nchunks);            % for the decoded data
+x = reshape(uint8(x), 4, nchunks);
+y = repmat(uint8(0), 3, nchunks);            % for the decoded data
 
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   % Rearrange every 4 bytes into 3 bytes
-   %
-   %    00aaaaaa 00bbbbbb 00cccccc 00dddddd
-   %
-   % to form
-   %
-   %    aaaaaabb bbbbcccc ccdddddd
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Rearrange every 4 bytes into 3 bytes
+%
+%    00aaaaaa 00bbbbbb 00cccccc 00dddddd
+%
+% to form
+%
+%    aaaaaabb bbbbcccc ccdddddd
 
-   y(1,:) = bitshift(x(1,:), 2);                    % 6 highest bits of y(1,:)
-   y(1,:) = bitor(y(1,:), bitshift(x(2,:), -4));    % 2 lowest bits of y(1,:)
+y(1,:) = bitshift(x(1,:), 2);                    % 6 highest bits of y(1,:)
+y(1,:) = bitor(y(1,:), bitshift(x(2,:), -4));    % 2 lowest bits of y(1,:)
 
-   y(2,:) = bitshift(x(2,:), 4);                    % 4 highest bits of y(2,:)
-   y(2,:) = bitor(y(2,:), bitshift(x(3,:), -2));    % 4 lowest bits of y(2,:)
+y(2,:) = bitshift(x(2,:), 4);                    % 4 highest bits of y(2,:)
+y(2,:) = bitor(y(2,:), bitshift(x(3,:), -2));    % 4 lowest bits of y(2,:)
 
-   y(3,:) = bitshift(x(3,:), 6);                    % 2 highest bits of y(3,:)
-   y(3,:) = bitor(y(3,:), x(4,:));                  % 6 lowest bits of y(3,:)
+y(3,:) = bitshift(x(3,:), 6);                    % 2 highest bits of y(3,:)
+y(3,:) = bitor(y(3,:), x(4,:));                  % 6 lowest bits of y(3,:)
 
-   % remove padding
-   switch rem(nebytes, 4)
-      case 2
-         y = y(1:end-2);
-      case 3
-         y = y(1:end-1);
-   end
+% remove padding
+switch rem(nebytes, 4)
+    case 2
+        y = y(1:end-2);
+    case 3
+        y = y(1:end-1);
+end
 
-   % reshape to a row vector and make it a character array
-   %y = char(reshape(y, 1, numel(y)));
-   
-   % MODIFED BY G.ERNY for comaptibility with zlibdecode
-   y = uint8(reshape(y, 1, numel(y)));
+% reshape to a row vector and make it a character array
+%y = char(reshape(y, 1, numel(y)));
+
+% MODIFED BY G.ERNY for comaptibility with zlibdecode
+y = uint8(reshape(y, 1, numel(y)));

@@ -9,7 +9,7 @@ function output = zlibdecode(input)
 %
 % See also zlibencode typecast
 
-error(nargchk(1, 1, nargin));
+narginchk(1,1);
 error(javachk('jvm'));
 if ischar(input)
     warning('zlibdecode:inputTypeMismatch', ...
