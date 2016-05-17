@@ -81,7 +81,7 @@ switch finneeStc.dataset{m}.description.dataFormat
             if options.indice
                 ind = parameters.mzMin;
             else
-                ind = findCloser( parameters.mzMin, MS(:,1));
+                ind = findCloser( parameters.mzMin, MS(:,1))
             end
             profileOut.title = ['Extracted ion profile ( m/z = ', ...
                 num2str(MS(ind, 1),fmt),'); (',...
@@ -89,7 +89,7 @@ switch finneeStc.dataset{m}.description.dataFormat
         end
         profileOut.plotType = 'profile';
         
-        profileOut.data = axeX;
+        profileOut.data(:,1) = axeX;
         profileOut.data(:,2) = 0;
         %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
@@ -121,7 +121,7 @@ switch finneeStc.dataset{m}.description.dataFormat
                 'dataset ',  num2str(m), ')'];
         end
         profileOut.plotType = 'profile';
-        profileOut.data = axeX;
+        profileOut.data(:,1) = axeX;
         profileOut.data(:,2) = 0;
         
         %2.2. getting each MS spectra and caulcaulating the profile
