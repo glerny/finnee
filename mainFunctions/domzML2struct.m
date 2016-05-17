@@ -22,6 +22,10 @@ function finneeStc = domzML2struct(varargin)
 %   .optional VARARGIN acepts the following values
 %       'dispOff'   remove all display text in the Matlab command window.
 %       'overwrite' Overwrite potentially existing files
+%       'fileIn'    Followed by the location of the initiation mzML file
+%       'fileOut'   Followed by the name and lacotaion of the destination
+%                   file(s). Don't use extension as two files will be
+%                   created
 %
 % 3. OUTPUT PARAMETERS
 %   .finneeStc 
@@ -89,7 +93,7 @@ while ~strcmp(LDR.label, 'run')
              'The mzML file is not complete')
     end
     [LDR, curLine] = getMZMLCamp(curLine, fidRead);
-    assignin('base', 'mzML', finneeStc.mzML)
+    
 end
 finneeStc.mzML.run.attributes = LDR.attributes;
 finneeStc.mzML.run.text = LDR.text;
@@ -272,7 +276,7 @@ while count <= scanCount
                 fwrite(fidWriteDat, ...
                     MS, 'double');
                 MSIndex(count,:) = [posIni, ftell(fidWriteDat), 2];
-                count = count + 1
+                count = count + 1;
             end
         end
     end
@@ -315,7 +319,6 @@ fclose(fidWriteDat);
                 end
                 s = addChildNode(LDR);
                 
-                assignin('base', 's', s)
                 outStrc.(parentLabel).(LDR.label){end+1} = s.(LDR.label);
             end
         end
@@ -362,8 +365,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.trace{1}.axeY.label = intLabel;
     finneeStc.dataset{1}.trace{1}.axeY.unit = intUnit;
     finneeStc.dataset{1}.trace{1}.indexInDat  = [ftell(fidWriteDat), 0, 2];
-    assignin('base', 'axeX', axeX)
-    assignin('base', 'TICP', TICP)
+    
     % WITH msconvert and agilent TICP is longer than axeX in the last
     % scan??? Correction add for this case
     % fwrite(fidWriteDat, [axeX' TICP'], 'double');
