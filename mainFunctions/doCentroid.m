@@ -9,7 +9,7 @@ function finneeStc = doCentroid (finneeStc, dataset, varargin)
 %   .required. DOCENTROID requires at least 2 parameters
 %       finneeStc
 %           is the finnee structure that contain information about the run
-%           and link and indexation of the associated dat file. 
+%           and link and indexation of the associated dat file.
 %       dataset
 %           dataset is the indice to the targeted dataset (i.e. in
 %           finneeStc.dataset{m}, where m is the target dataset). The
@@ -17,13 +17,13 @@ function finneeStc = doCentroid (finneeStc, dataset, varargin)
 %
 %   .optionals. VARARGIN describes the optional paramters.
 %       'method' followed my the name of the centroid method
-%           gle1' : default method 
+%           gle1' : default method
 %                   find  maxima. The peak picking algorithms and output
 %                   can be fund at peakPickingMS_gle1.m
 %
 % 3. OUTPUT PARAMETERS
-%   .finneeStc 
-%       Target Finnee structure 
+%   .finneeStc
+%       Target Finnee structure
 %
 % 4. EXAMPLES
 %    finneeStc = doCentroid(finneeStc);
@@ -46,31 +46,65 @@ info.function.ownerContact = 'guillaume@fe.up.pt';
 
 m = parameters.dataset;
 
-[mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);
-TICP = [];  BPP = []; mzBPP = []; MSIndex = [];
-datasetType = 'centroid spectrum';
 
-fidReadDat = fopen(finneeStc.path2dat, 'a+b');
 % 2. CHECKING THE DATA TYPE
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
-        % 3. GETTING EACH SCAN
         
-        axeX = finneeStc.dataset{m}.axes.time.values;
-        indTimeStt = findCloser(parameters.xMin, axeX);
-        indTimeEnd = findCloser(parameters.xMax, axeX);
+        fidReadDat = fopen(finneeStc.path2dat, 'a+b');
+        % 1. loading reference MZ axe
+        index = finneeStc.dataset{m}.indexInDat(1, :);
+        fseek(fidReadDat, index(1), 'bof');
+        refMZ = ...
+            fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
         
-        for ii = indTimeStt:indTimeEnd
-            disp(['processing scan ', num2str(ii), ' out of ',...
-                num2str(length(axeX)), ' scans'])
-            index = finneeStc.dataset{m}.indexInDat(ii, :);
+        axeX(:,1)  = finneeStc.dataset{m}.axes.time.values;
+        
+        scanCount = length(axeX);
+        [mzMin, intMin] = deal(inf); [mzMax, intMax] = deal(0);
+        [TICP, BPP, mzBPP,] = deal(zeros(scanCount, 1));
+        
+        MSIndex = zeros(scanCount, 6);
+        
+        datasetType = 'centroid spectrum';
+        
+        for ii = 1:scanCount
+            
+            if options.display
+                disp(['processing scan ', num2str(ii), ' out of ',...
+                    num2str(scanCount), ' scans'])
+            end
+            
+            
+            
+            index = finneeStc.dataset{m}.indexInDat(ii+1, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-            ind2rem = MS(:,1) < parameters.mzMin |...
-                MS(:,1) > parameters.mzMax;
-            MS(ind2rem, :) = [];
-            if ~isempty(MS)
+            
+            switch index(6)
+                case 2
+                    MSfull = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MSfull = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MSfull = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
+            
+            % 4. Correcting axeMX
+            axeMZ = refMZ - index(4)*refMZ;
+            
+            ind2rem = axeMZ(:,1) < parameters.mzMin |...
+                axeMZ(:,1) > parameters.mzMax;
+            MSfull(ind2rem) = [];
+            axeMZ(ind2rem) = [];
+            
+            if ~isempty(MSfull)
+                
+                MS(:,1) = axeMZ; MS(:,2) =  MSfull;
                 
                 % 4. DOING THE PEAKPICKING
                 switch parameters.method
@@ -78,7 +112,7 @@ switch finneeStc.dataset{m}.description.dataFormat
                         ppMS = peakPickingMS_gle1(MS);
                         
                         % 5. CALCULATE PROFILE AND SAVE DATA
-                        % !NOTE! the code is set for MZ at peak apex 
+                        % !NOTE! the code is set for MZ at peak apex
                         
                         if mzMin > min(ppMS(:,1)), mzMin = min(ppMS(:,1)); end
                         if mzMax < max(ppMS(:,1)), mzMax = max(ppMS(:,1)); end
@@ -89,28 +123,36 @@ switch finneeStc.dataset{m}.description.dataFormat
                             TICP(ii) = 0;
                             BPP(ii) = 0;
                             mzBPP(ii) = 0;
-                            fseek(fidReadDat, 0, 'eof')
-                            MSIndex(ii, :) = [ftell(fidReadDat), ftell(fidReadDat), 2];
+                            fseek(fidReadDat, 0, 'eof');
+                            MSIndex(ii, :) = [ftell(fidReadDat) ftell(fidReadDat) 2 0 0 4];
                         else
                             TICP(ii) = sum(ppMS(:,2));
                             [BPP(ii), indMax] = max(ppMS(:,2));
                             mzBPP(ii) = ppMS(indMax,1);
                             fseek(fidReadDat, 0, 'eof');
-                            MSIndex(ii, :) = [ftell(fidReadDat), 0, 2];
-                            fwrite(fidReadDat, ppMS, 'double');
-                            MSIndex(ii, 2) = ftell(fidReadDat);
+                            
+                            posIni =  ftell(fidReadDat);
+                            
+                            if max(ppMS(:,2)) < 4294967295
+                                fwrite(fidReadDat, ppMS, 'single');
+                                MSIndex(ii,:) = [posIni ftell(fidReadDat) 2 0 0 4];
+                                
+                            else
+                                fwrite(fidReadDat, ppMS, 'double');
+                                MSIndex(ii,:) = [posIni ftell(fidReadDat) 2 0 0 8];
+                            end
+                            
                         end
                     otherwise
                         error('This method has not been implemented in this version')
                 end
                 
-               
+                
             end
         end
         save2struc()
         fclose(fidReadDat);
     otherwise
-        fclose(fidReadDat);
         error('dataset should be ''profile spectrum'' dataset')
 end
 
@@ -129,7 +171,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.info = info;
         finneeStc.dataset{end}.info.parameters = parameters;
         finneeStc.dataset{end}.info.errors = {};
-
+        
         timeLabel = finneeStc.dataset{m}.axes.time.label;
         timeUnit = finneeStc.dataset{m}.axes.time.unit;
         mzLabel = finneeStc.dataset{m}.axes.mz.label;
@@ -142,8 +184,8 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.description.mzEnd = mzMax;
         finneeStc.dataset{end}.description.intMin = intMin;
         finneeStc.dataset{end}.description.intMax = intMax;
-        finneeStc.dataset{end}.description.timeStart = axeX(indTimeStt);
-        finneeStc.dataset{end}.description.timeEnd = axeX(indTimeEnd);
+        finneeStc.dataset{end}.description.timeStart = axeX(1);
+        finneeStc.dataset{end}.description.timeEnd = axeX(end);
         finneeStc.dataset{end}.description.dataFormat = datasetType;
         finneeStc.dataset{end}.indexInDat = MSIndex;
         
@@ -170,7 +212,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{1}.axeY.label = intLabel;
         finneeStc.dataset{end}.trace{1}.axeY.unit = intUnit;
         finneeStc.dataset{end}.trace{1}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX TICP'], 'double');
+        fwrite(fidReadDat, [axeX TICP], 'double');
         finneeStc.dataset{end}.trace{1}.indexInDat(2) = ftell(fidReadDat);
         
         % ** BPP
@@ -185,7 +227,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{2}.axeY.label = intLabel;
         finneeStc.dataset{end}.trace{2}.axeY.unit = intUnit;
         finneeStc.dataset{end}.trace{2}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX BPP'], 'double');
+        fwrite(fidReadDat, [axeX BPP], 'double');
         finneeStc.dataset{end}.trace{2}.indexInDat(2) = ftell(fidReadDat);
         
         % ** mzBPP
@@ -200,7 +242,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{3}.axeY.label = mzLabel;
         finneeStc.dataset{end}.trace{3}.axeY.unit = mzUnit;
         finneeStc.dataset{end}.trace{3}.indexInDat  = [ftell(fidReadDat), 0, 2];
-        fwrite(fidReadDat, [axeX mzBPP'], 'double');
+        fwrite(fidReadDat, [axeX mzBPP], 'double');
         finneeStc.dataset{end}.trace{3}.indexInDat(2) = ftell(fidReadDat);
     end
 
@@ -234,7 +276,7 @@ parameters.mzMin = 0;
 parameters.mzMax = inf;
 parameters.xMin = 0;
 parameters.xMax = inf;
-options.text = 1;
+options.display = 1;
 options.save = 1;
 parameters.dataset = dataset;
 parameters.method = 'gle1';
