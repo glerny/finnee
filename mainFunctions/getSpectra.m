@@ -58,7 +58,7 @@ fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
 %% FUNCTION CORE
 
-axeX = finneeStc.dataset{m}.axes.time.values;
+axeX(:,1) = finneeStc.dataset{m}.axes.time.values;
 if options.indice
     indTimeStt = parameters.xMin;
     indTimeEnd = parameters.xMax;
@@ -77,25 +77,47 @@ switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
         spectraOut.plotType = 'profile';
         
-        %2.1 getting MS spectra within the interval indTimeStt:indTimeEnd
+        % 1. loading reference MZ axe
+        index = finneeStc.dataset{m}.indexInDat(1, :);
+        fseek(fidReadDat, index(1), 'bof');
+        refMZ = ...
+            fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+        
+        % 2. correcting MS spectra with inTimeStt
+        index = finneeStc.dataset{m}.indexInDat(indTimeStt + 1, :);
+        axeMZ = refMZ - index(4)*refMZ;
+        ind2rem = axeMZ < parameters.mzMin | axeMZ > parameters.mzMax;
+        axeMZ(ind2rem) = [];
+        spectraOut.data(:,1)  = axeMZ;
+        spectraOut.data(:,2) = 0;
+        
+        % 2. calculating the sum of MZ 
         for ii = indTimeStt:indTimeEnd
-            index = finneeStc.dataset{m}.indexInDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii+1, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-            ind2rem = MS(:,1) < parameters.mzMin |...
-                MS(:,1) > parameters.mzMax;
-            MS(ind2rem, :) = [];
             
-            if isempty(spectraOut.data)
-                spectraOut.data  = MS;
-            else
-                spectraOut.data (:,2) = spectraOut.data(:,2) + MS(:,2);
+            switch index(6)
+                case 2
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
+            
+            MS(ind2rem) = [];
+            
+            spectraOut.data (:,2) = spectraOut.data(:,2) + MS;
                 % NOTE: We assumed that the m/z axes in the same for all
                 % scan this is not entirely true as there are some small
                 % variation in the m/z values those seems small enough to
                 % be discarded
-            end
+           
         end
         
     case 'centroid spectrum'
@@ -105,10 +127,20 @@ switch finneeStc.dataset{m}.description.dataFormat
         for ii = indTimeStt:indTimeEnd
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-            % !Provisory solution to deal with different type of centroid
-            % data
+            
+            switch index(6)
+                case 2
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
             
             ind2rem = MS(:,1) < parameters.mzMin |...
                 MS(:,1) > parameters.mzMax;
