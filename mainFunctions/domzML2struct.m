@@ -126,6 +126,13 @@ while ~strcmp(LDR.label, '/spectrum')
         else
             error('attribute count not present in tag spectrumList');
         end
+    elseif strcmp(LDR.label, 'spectrum')
+        [bool, ~, provField] = fieldfind( LDR.attributes, 'defaultArrayLength');
+        if bool
+            lMS = str2double(provField{1});
+        else
+             error('attribute defaultArrayLength not present in tag spectrum');
+        end
     elseif strcmp(LDR.label, 'cvParam')
         [bool, ~, field] = fieldfind( LDR.attributes, 'accession');
         if bool
@@ -161,11 +168,62 @@ end
 fseek(fidRead, keptPl, 'bof'); % Go back at the start of the spectrumList
 curLine = fgetl(fidRead);
 
+missVal = false;
+ 
+% check for different in length in MS profile spectrum if yes missing
+% values
 if strcmp(datasetType, 'profile spectrum')
-    axeMZ = [];
+   
     count = 1;
-    while ~strcmp(LDR.label, '/run') && count <= scanCount
+    while count <= scanCount
+        
+        if strcmp(LDR.label, 'spectrum')
+            [bool, ~, provField] = fieldfind( LDR.attributes, 'defaultArrayLength');
+            if bool
+                if lMS ~= str2double(provField{1});
+                    missVal = true;
+                    break
+                end
+            else
+                error('attribute defaultArrayLength not present in tag spectrum');
+            end
+            count = count + 1;
+            if options.display
+                disp(['checking for missing values ', num2str(count), ...
+                    ' out of ', num2str(scanCount)])
+            end
+        end
+        
+        
+        curLine = fgetl(fidRead);
+        if ~ischar(curLine)
+            error('myApp:endOfFile', ...
+                'The mzML file is not complete')
+        end
+        [LDR, curLine] = getMZMLCamp(curLine, fidRead);
+    end
+end
+
+if missVal
+    fseek(fidRead, keptPl, 'bof'); % Go back at the start of the spectrumList
+    curLine = fgetl(fidRead);
+    % DO GENERATE NEW AXE
+    count = 1;
+    axeMZ = [];
+    rdg = finneeStc.info.parameters.rounding;
+    MSIndex = zeros(scanCount+1, 6);
+    
+    while count <= scanCount
         if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
+        if strcmp(LDR.label, 'cvParam') && ~isempty(LDR.attributes)
+            [~, ~, field] = fieldfind( LDR.attributes, 'accession');
+            if strcmp(field{1}, 'MS:1000016')
+                if options.display
+                    disp(['Generating mzAxe ', num2str(count), ...
+                        ' out of ', num2str(scanCount)])
+                end
+            end
+        end
         if strcmp(LDR.label, 'binary')
             input = LDR.text;
             switch dataFormat
@@ -184,18 +242,27 @@ if strcmp(datasetType, 'profile spectrum')
             if boolArray
                 boolArray = 0;
                 mzValue = output;
-                if options.display
-                    disp(['Checking the m/z axe ', num2str(count), ...
-                        ' out of ', num2str(scanCount)])
-                end
-                axeMZ = unique([axeMZ, round(mzValue, 4)]);
             else
                 boolArray = 1;
+                
+                if isempty(axeMZ)
+                    axeMZ = mzValue;
+                else
+                    [~,ia,ib] = intersect(round(axeMZ, rdg), round(mzValue, rdg));
+                    cst = mean((axeMZ(ia) - mzValue(ib))./axeMZ(ia));
+                    MSIndex(count+1, 4) = cst;
+                    MSIndex(count+1, 5) =  ...
+                        std((axeMZ(ia) - mzValue(ib))./axeMZ(ia));
+                    axe = [axeMZ mzValue/(1-cst)];
+                    [~,ia,~] = unique(round(axe, rdg));
+                    axeMZ = axe(ia);
+                end
+                
+                
+                
                 count = count + 1;
             end
-        else
         end
-        
         
         curLine = fgetl(fidRead);
         if ~ischar(curLine)
@@ -206,15 +273,29 @@ if strcmp(datasetType, 'profile spectrum')
     end
 end
 
-
-
 fseek(fidRead, keptPl, 'bof'); % Go back at the start of the spectrumList
 curLine = fgetl(fidRead);
 
-[axeX, TICP, BPP, mzBPP, MSIndex, data2keep] = deal(zeros(scanCount, 1));
-MSIndex = zeros(scanCount, 3);
+[axeX, TICP, BPP, mzBPP, data2keep] = deal(zeros(scanCount, 1));
+
+if strcmp(datasetType, 'profile spectrum')
+    
+    if missVal
+        posIni =  ftell(fidWriteDat);
+        fwrite(fidWriteDat, axeMZ, 'single');
+        MSIndex(1,:) = [posIni ftell(fidWriteDat) 1 0 0 4];
+    else
+        axeMZ = [];
+        MSIndex = zeros(scanCount+1, 6);
+    end
+else
+    MSIndex = zeros(scanCount, 6);
+end
+
+
 
 count = 1;
+
 % 4. EXTRACT DATA FOR EACH SCAN
 while count <= scanCount
     if strcmp(LDR.label, 'spectrum'), boolArray = 1; end
@@ -256,11 +337,86 @@ while count <= scanCount
                 
                 MS =  [mzValue' intValue'];
                 if strcmp(datasetType, 'profile spectrum')
-                    MS_new = axeMZ';
-                    MS_new(:,2) = 0;
-                    Lia = ismember(axeMZ, round(MS(:,1), 4));
-                    MS_new(Lia, 2) = MS(:,2);
-                    MS = MS_new;
+                    if missVal
+                        cst = MSIndex(count+1, 4);
+                        curMZ = MS(:,1) / (1-cst);
+                        MS2write = axeMZ*0;
+                        Lia = ismember(round(axeMZ, rdg),round(curMZ, rdg));
+                        MS2write(Lia) = MS(:,2);
+                        
+                        posIni =  ftell(fidWriteDat);
+                        
+                        if max(MS2write) < 65535
+                            fwrite(fidWriteDat, MS2write, 'uint16');
+                            MSIndex(count+1,1:3) = [posIni ftell(fidWriteDat) 1];
+                            MSIndex(count+1,6) = 2;
+                            
+                        elseif max(MS2write) < 4294967295
+                            fwrite(fidWriteDat, MS2write, 'single');
+                            MSIndex(count+1,1:3) = [posIni ftell(fidWriteDat) 1];
+                            MSIndex(count+1,6) = 4;
+                            
+                        else
+                            fwrite(fidWriteDat, MS2write, 'double');
+                            MSIndex(count+1,1:3) = [posIni ftell(fidWriteDat) 1];
+                            MSIndex(count+1,6) = 8;
+                        end
+                        
+                    else
+                        if isempty(axeMZ)
+                            axeMZ = MS(:,1);
+                            % write axeMS in file, recorded in first line of index
+                            posIni =  ftell(fidWriteDat);
+                            fwrite(fidWriteDat, axeMZ, 'single');
+                            MSIndex(count,:) = [posIni ftell(fidWriteDat) 1 0 0 4];
+                            posIni =  ftell(fidWriteDat);
+                            
+                            if max(MS(:,2)) < 65535
+                                fwrite(fidWriteDat, MS(:,2), 'uint16');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 0 0 2];
+                                
+                            elseif max(MS(:,2)) < 4294967295
+                                fwrite(fidWriteDat, MS(:,2), 'single');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 0 0 4];
+                                
+                            else
+                                fwrite(fidWriteDat, MS(:,2), 'double');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 0 0 8];
+                            end
+                            
+                        else
+                            cst = mean((axeMZ - MS(:,1))./(axeMZ));
+                            sCst = std((axeMZ - MS(:,1))./(axeMZ));
+                            posIni =  ftell(fidWriteDat);
+                            
+                            if max(MS(:,2)) < 65535
+                                fwrite(fidWriteDat, MS(:,2), 'uint16');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 cst sCst 2];
+                                
+                            elseif max(MS(:,2)) < 4294967295
+                                fwrite(fidWriteDat, MS(:,2), 'single');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 cst sCst 4];
+                                
+                            else
+                                fwrite(fidWriteDat, MS(:,2), 'double');
+                                MSIndex(count+1,:) = [posIni ftell(fidWriteDat) 1 cst sCst 8];
+                            end
+                        end
+                    end
+                    
+                else
+                    % write
+                    posIni =  ftell(fidWriteDat);
+                    
+                    if max(MS(:,2)) < 4294967295
+                        fwrite(fidWriteDat, MS, 'single');
+                        MSIndex(count,:) = [posIni ftell(fidWriteDat) 2 0 0 4];
+                        
+                    else
+                        fwrite(fidWriteDat, MS, 'double');
+                        MSIndex(count,:) = [posIni ftell(fidWriteDat) 2 0 0 8];
+                    end
+                    
                 end
                 
                 % calculates profiles and limits
@@ -271,11 +427,7 @@ while count <= scanCount
                 TICP(count) = sum(MS(:,2));
                 [BPP(count), indMax] = max(MS(:,2));
                 mzBPP(count) = MS(indMax, 2);
-                % write
-                posIni =  ftell(fidWriteDat);
-                fwrite(fidWriteDat, ...
-                    MS, 'double');
-                MSIndex(count,:) = [posIni, ftell(fidWriteDat), 2];
+               
                 count = count + 1;
             end
         end
@@ -343,7 +495,7 @@ fclose(fidWriteDat);
     finneeStc.dataset{1}.description.dataFormat = datasetType;
     finneeStc.dataset{1}.indexInDat = MSIndex;
 
-    finneeStc.dataset{1}.axes.time.values = axeX';
+    finneeStc.dataset{1}.axes.time.values = axeX;
     finneeStc.dataset{1}.axes.time.label = timeLabel;
     finneeStc.dataset{1}.axes.time.unit = timeUnit;
     finneeStc.dataset{1}.axes.mz.values = [];
@@ -419,6 +571,7 @@ parameters.xMax = inf;
 parameters.mzMin = 0;
 parameters.mzMax = inf;
 parameters.prec4mz = '%0.4f';
+parameters.rounding = 5;
 options.display = 1;
 options.ifExist = 'Stop';
 
