@@ -88,12 +88,23 @@ switch finneeStc.dataset{m}.description.dataFormat
             if options.display 
                 fprintf('processing scan %d out of %d scans \n', ii, length(axeX))
             end
+            
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-				% MS is ths centroid MS scan ii with in first column the m/z values and in
-				% second columns the corresponding intensity counts
+            
+            switch index(6)
+                case 2
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
 				
             ind2rem = MS(:,1) < parameters.mzMin |...
                 MS(:,1) > parameters.mzMax;
