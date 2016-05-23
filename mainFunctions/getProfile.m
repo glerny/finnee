@@ -53,59 +53,76 @@ fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
 %% FUNCTION CORE
 
-axeX = finneeStc.dataset{m}.axes.time.values;
+axeX(:,1) = finneeStc.dataset{m}.axes.time.values;
 fmt = finneeStc.info.parameters.prec4mz;
         
 % 1. Checking the data type
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
         
-        %2.1. FInd limits
+        % 1. loading reference MZ axe
         index = finneeStc.dataset{m}.indexInDat(1, :);
         fseek(fidReadDat, index(1), 'bof');
-        MS = ...
-            fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+        refMZ = ...
+            fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+        
+        % 2. FInd limits
         if parameters.mzMin ~=  parameters.mzMax
             if options.indice
                 indMzStt = parameters.mzMin;
                 indMzEnd = parameters.mzMax;
             else
-                indMzStt = findCloser(parameters.mzMin, MS(:,1));
-                indMzEnd = findCloser(parameters.mzMax,  MS(:,1));
+                indMzStt = findCloser(parameters.mzMin, refMZ);
+                indMzEnd = findCloser(parameters.mzMax, refMZ);
             end
             profileOut.title = ['Extracted ion profile ( m/z = ', ...
-                num2str(MS(indMzStt, 1), fmt),':', ...
-                num2str(MS(indMzEnd, 1), fmt), '); (',...
+                num2str(refMZ(indMzStt), fmt),':', ...
+                num2str(refMZ(indMzEnd), fmt), '); (',...
                 'dataset ',  num2str(m), ')'];
         else
             if options.indice
                 ind = parameters.mzMin;
             else
-                ind = findCloser( parameters.mzMin, MS(:,1))
+                ind = findCloser( parameters.mzMin, refMZ)
             end
             profileOut.title = ['Extracted ion profile ( m/z = ', ...
-                num2str(MS(ind, 1),fmt),'); (',...
+                num2str(refMZ(ind),fmt),'); (',...
                 'dataset ',  num2str(m), ')'];
         end
+        
         profileOut.plotType = 'profile';
         
         profileOut.data(:,1) = axeX;
         profileOut.data(:,2) = 0;
+        
         %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
-            index = finneeStc.dataset{m}.indexInDat(ii, :);
+            index = finneeStc.dataset{m}.indexInDat(ii+1, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            
+             switch index(6)
+                case 2
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+             end
+            
             if parameters.mzMin ~=  parameters.mzMax
-                MS = MS(indMzStt:indMzEnd, :);
+                MS = MS(indMzStt:indMzEnd);
             else
-                MS = MS(ind, :);
+                MS = MS(ind);
             end
             if isempty(MS)
                 profileOut.data(ii, 2) = 0;
             else
-                profileOut.data(ii, 2) = sum(MS(:,2));
+                profileOut.data(ii, 2) = sum(MS);
             end
         end
         
@@ -126,10 +143,24 @@ switch finneeStc.dataset{m}.description.dataFormat
         
         %2.2. getting each MS spectra and caulcaulating the profile
         for ii = 1:length(axeX)
+            
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
-            MS = ...
-                fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            
+            switch index(6)
+                case 2
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    MS = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
+             
             ind2rem = MS(:,1) < parameters.mzMin |...
                 MS(:,1) > parameters.mzMax;
             MS(ind2rem, :) = [];
