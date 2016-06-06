@@ -228,99 +228,10 @@ while 1
     if ii > length(MII), break; end
 end
 
-% %%%%%%%%%%%%%% ADDING THE 08-10-2015 FIND ionic distribution that belong
-% %%%%%%%%%%%%%% to the same ion (t-test)
-
-if parameters.concat.do
-    fom.data = zeros(length(MII), 4);
-    for ii = 1:length(MII)
-        curData = MII{ii};
-        % 	% 4.2. Calculating figures of merits
-        fom.data(ii, 1) = ii;
-        fom.data(ii, 2) = mean(curData(:,3));
-        fom.data(ii, 3) = std(curData(:,3));
-        fom.data(ii, 4) = length(curData(:,1));
-    end
-    
-    ll = length(fom.data(:,1));
-    ResCorr = zeros(ll,1);
-    for ii = 1:ll
-        if options.display
-            fprintf('t-test and concatenated: %d out of %d \n', ii, ll)
-        end
-        s = ((fom.data(ii,4)-1)*fom.data(ii,3)^2+ (fom.data(:,4)-1).*...
-            fom.data(:,3).^2)./(fom.data(ii,4)+fom.data(:,4)-2);
-        t = abs(fom.data(ii,2)-fom.data(:,2))./(sqrt(s).*...
-            (sqrt(1/fom.data(ii,4)+1/fom.data(:,4)))');
-        degFre = fom.data(ii,4) + fom.data(:,4) - 2;
-        tcoeff = zeros(ll,1);
-        for jj = length(parameters.concat.tdis):-1:1
-            indm = find(degFre <= parameters.concat.tdis(jj, 1));
-            tcoeff(indm) = parameters.concat.tdis(jj, 2);
-        end
-        ind = find(t <= tcoeff);
-        
-        if length(ind) > 1
-            ind2rem = find(ind == ii);
-            ind(ind2rem) = [];
-            ResCorr(ii,1) = ii;
-            for jj = 1:length(ind)
-                ResCorr(ii, jj+1) = ind(jj);
-            end
-        end
-    end
-    
-    indpur =  find(ResCorr(:,1) == 0); % pure trace not to mingle
-    ResCorr(indpur,:) = [];
-    toDell = [];
-    
-    list = {};
-    while ~isempty(ResCorr)
-        list1 = [];
-        list2 = nonzeros(ResCorr(end,:));
-        while length(list1) ~= length(list2)
-            list1 = list2;
-            list2 = [];
-            for ii = 1:length(list1)
-                ind2list = find(ResCorr(:,1) == list1(ii));
-                list2 = [list2; nonzeros(ResCorr(ind2list,:))];
-            end
-            list2 = unique(list2);
-        end
-        list{end+1} = list2;
-        ind2rem = [];
-        for ii = 1:length(list2)
-            ind2test = find(ResCorr(:,1) == list1(ii));
-            if ~isempty(ind2test)
-                ind2rem(end+1) = ind2test;
-            end
-        end
-        ResCorr(ind2rem, :) = [];
-    end
-
-
-    for ii = 1:length(list)
-        newSerie = [];
-        for jj = 1:length(list{ii})
-            newSerie = [newSerie; MII{list{ii}(jj)}];
-        end
-        newSerie = sortrows(newSerie, 1);
-        toDell = [toDell; list{ii}];
-        ind2cut = ...
-            [0; find(diff(newSerie(:,1)) > 1+ parameters.concat.snul); ...
-            length(newSerie(:,1))];
-        for jj = 1:length(ind2cut)-1
-            MII{end+1} = newSerie(ind2cut(jj)+1:ind2cut(jj+1), :);
-        end
-    end
-    MII(toDell) = [];
-end
-
-
 % 4. FINDING EDGES AND COMPLETING PARTIAL PIP TO PIP 
 	% 4.1. Completing partial PIP
-    fom.label ={'PIP', 'meanMass', 'stdMass', 'nbrPts', 'Imax', ...
-		'timeAtImax', 'Area', 'center', 'varInt', 'Noise', 'Signal'};
+    fom.label ={'PIPindice', 'meanMass', 'stdMass', 'nbrPts', 'Imax', ...
+		'timeAtImax', 'Area', 'center', 'varInt', 'minMass', 'maxMass'};
 	fom.data = zeros(length(MII), 11);	
 for ii = 1:length(MII)
     if options.display
@@ -369,9 +280,8 @@ for ii = 1:length(MII)
     fom.data(ii, 8) = trapz(axeX(curData(:, 1)), ...
         axeX(curData(:, 1)).*curData(:, 2))/fom.data(ii, 7);
     fom.data(ii, 9) =  var(curData(:,2));
-    Ibckg = curData(:,2) <= 3*intThresh;
-    fom.data(ii, 10) = std(curData(Ibckg,2));
-    fom.data(ii, 11) = fom.data(ii, 5)-mean(curData([1,2, end-1, end],2));    
+    fom.data(ii, 10) = min(curData(:,3));
+    fom.data(ii, 11) = max(curData(:,3));    
 end
 
 PIPOut.title = ['''ionic profile'' dataset of the ''centroid spectrum'' dataset ', ...
@@ -389,7 +299,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
 % 1. SAVEANDPLOT
     function saveAndPlot()
         finneeStc.dataset{end+1}.name = PIPOut.title;
-        finneeStc.dataset{end}.dateOfCreation = datetime;
+%        finneeStc.dataset{end}.dateOfCreation = datetime;
         finneeStc.dataset{end}.info = info;
         finneeStc.dataset{end}.info.parameters = parameters;
         finneeStc.dataset{end}.info.errors = {};
@@ -432,7 +342,15 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
             BPP(curData(ind2add,1), 2) = curData(ind2add,2);
             mzBPP(curData(ind2add,1), 2) = curData(ind2add,3);
             finneeStc.dataset{end}.indexInDat(NF2,1) = ftell(fidWriteDat);
-            fwrite(fidWriteDat, curData, 'double');
+            
+            if max(curData(:,2)) < 4294967295
+                fwrite(fidReadDat, curData, 'single');
+                finneeStc.dataset{end}.indexInDat(NF2,6) = 4;
+            else
+                fwrite(fidReadDat, curData, 'double');
+                finneeStc.dataset{end}.indexInDat(NF2,6) = 8;
+            end
+            
             finneeStc.dataset{end}.indexInDat(NF2,2) = ftell(fidWriteDat);
             finneeStc.dataset{end}.indexInDat(NF2,3) = length(curData(1,:));
             if mzStart > min(curData(:,3)), mzStart = min(curData(:,3)); end
@@ -454,7 +372,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{1}.name = ...
             ['Total Ion Current Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
+%        finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
         finneeStc.dataset{end}.trace{1}.code = 'TIP';
         finneeStc.dataset{end}.trace{1}.plotType = 'profile';
         finneeStc.dataset{end}.trace{1}.axeX.label = timeLabel;
@@ -469,7 +387,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{2}.name = ...
             ['Base Peak Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
+%        finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
         finneeStc.dataset{end}.trace{1}.code = 'BPP';
         finneeStc.dataset{end}.trace{2}.plotType = 'profile';
         finneeStc.dataset{end}.trace{2}.axeX.label = timeLabel;
@@ -484,7 +402,7 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
          finneeStc.dataset{end}.trace{3}.name = ...
             ['m/z @ Base Peak (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
+%        finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
         finneeStc.dataset{end}.trace{1}.code = 'mzBPP';
         finneeStc.dataset{end}.trace{3}.plotType = 'profile';
         finneeStc.dataset{end}.trace{3}.axeX.label = timeLabel;

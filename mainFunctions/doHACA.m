@@ -18,7 +18,7 @@ function finneeStc = doHACA(finneeStc, dataset, varargin)
 %           dataset should be a 'ionic profile' dataset
 %
 %   .optionals. VARARGIN describes the optional paramters.  
-%       'maxProfiles' followed by an integer (default 2000)
+%       'maxProfiles' followed by an integer (default 5000)
 %           Allow to limit the number of PIP based on their maximum
 %           intensuty. This allow to speed up the compuational time.
 %       'minCorCoef' followed by a number (default 0.9)
@@ -72,8 +72,20 @@ switch finneeStc.dataset{m}.description.dataFormat
             II = fom.data(PIPInUse(ii), 1);
             index = finneeStc.dataset{m}.indexInDat(II, :);
             fseek(fidReadDat, index(1), 'bof');
-            curPIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-                index(3)], 'double');
+            
+             switch index(6)
+                case 2
+                    curPIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    curPIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    curPIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+             end
             matrixOfPIP(curPIP(:,1), ii) = curPIP(:,2);
             clusters.step{1}.cluster{ii} = ii;
         end
@@ -81,6 +93,20 @@ switch finneeStc.dataset{m}.description.dataFormat
         R = corrcoef(matrixOfPIP);
         LIntensity = fom.data(PIPInUse, 5);
         LPIP  = fom.data(PIPInUse, 1);
+        
+        % 4.  Initialising the CA field
+        if ~isfield(finneeStc.dataset{m}, 'CA')
+            finneeStc.dataset{m}.CA = {};
+        end
+        finneeStc.dataset{m}.CA{end+1}.name = ...
+            'Dierarchical agglomerative cluster analysis.';
+%        finneeStc.dataset{m}.CA{end}.dateOfCreation = datetime;
+        finneeStc.dataset{m}.CA{end}.info = info;
+        finneeStc.dataset{m}.CA{end}.info.parameters = parameters ;
+        finneeStc.dataset{m}.CA{end}.info .error = {};
+
+        fidWriteDat = fopen(finneeStc.path2dat, 'ab');
+        cl2add.step = {};
         
         % 3. FILLING THE HIERARCHICAL STRUCTURE
         for ii = 2:length(R(:,1))
@@ -99,57 +125,40 @@ switch finneeStc.dataset{m}.description.dataFormat
                 indMax = colMin(1); indMin = linMin(1);
             end
             
-            % create the clusters in step ii
-            clusters.step{ii}.HL = max_CC;
-            clusters.step{ii}.cluster = clusters.step{ii-1}.cluster;
-            profiles2Clust = [clusters.step{ii-1}.cluster{indMin},...
-                clusters.step{ii-1}.cluster{indMax}];
+            % create the clusters in step 2
+            clusters.step{2}.HL = max_CC;
+            clusters.step{2}.cluster = clusters.step{1}.cluster;
+            profiles2Clust = [clusters.step{1}.cluster{indMin},...
+                clusters.step{1}.cluster{indMax}];
             [~, ix] = sort(LIntensity(profiles2Clust), 'descend');
-            clusters.step{ii}.cluster{indMax} = profiles2Clust(ix);
-            clusters.step{ii}.cluster(indMin) = [];
+            clusters.step{2}.cluster{indMax} = profiles2Clust(ix);
+            clusters.step{2}.cluster(indMin) = [];
             R(:, indMin) = [];
             R(indMin, :) = [];
-        end
-        
-        % 4.  SAVING THE HIERARCHICAL STRUCTURE
-        if isfield(finneeStc.dataset{m}, 'CA')
-            error('a cluster analysis already exists in this dataset')
-        end
-        finneeStc.dataset{m}.CA = {};
-        finneeStc.dataset{m}.CA{end+1}.name = ...
-            'Dierarchical agglomerative cluster analysis.';
-        finneeStc.dataset{m}.CA{end}.dateOfCreation = datetime;
-        finneeStc.dataset{m}.CA{end}.info = info;
-        finneeStc.dataset{m}.CA{end}.info.parameters = parameters ;
-        finneeStc.dataset{m}.CA{end}.info .error = {};
-
-        fidWriteDat = fopen(finneeStc.path2dat, 'ab');
-        cl2add.step = {};
-        for ii = 1:length(clusters.step)
-            if options.display,
-                fprintf('Saving cluster : %d / %d \n', ii, ...
-                    length(clusters.step))
-            end
-            cl2add.step{end+1}.HL = clusters.step{ii}.HL;
+            
+            cl2add.step{end+1}.HL = clusters.step{2}.HL;
             cl2add.step{end}.index2DotDat = [ftell(fidWriteDat), 0, 1];
             data2write = zeros(1, length(clusters.step));
-            for jj = 1:length(clusters.step{ii}.cluster)
-                if length(clusters.step{ii}.cluster{jj}) >= parameters.PIPperCl
-                    data2write(end+1, 1:length(clusters.step{ii}.cluster{jj})) = ...
-                        LPIP(clusters.step{ii}.cluster{jj});
+            for jj = 1:length(clusters.step{2}.cluster)
+                if length(clusters.step{2}.cluster{jj}) >= parameters.PIPperCl
+                    data2write(end+1, 1:length(clusters.step{2}.cluster{jj})) = ...
+                        LPIP(clusters.step{2}.cluster{jj});
                 end
             end
             data2write(1,:) = [];
             ind2rem = sum(data2write) == 0;
             data2write(:,ind2rem) = [];
+            
             if isempty(data2write)
                 cl2add.step{end}.index2DotDat(2) = ftell(fidWriteDat);
                 cl2add.step{end}.index2DotDat(3) = 0;
             else
-                fwrite(fidWriteDat, data2write, 'double');
+                fwrite(fidWriteDat, data2write, 'single');
                 cl2add.step{end}.index2DotDat(2) = ftell(fidWriteDat);
                 cl2add.step{end}.index2DotDat(3) = length(data2write(1,:));
             end
+            
+            clusters.step{1} = clusters.step{2};
         end
         
         finneeStc.dataset{m}.CA{end}.HStructure = cl2add;
@@ -171,7 +180,7 @@ function [parameters, options] = ...
 
 % defaults parameters
 parameters.minCC = 0.9;
-parameters.maxPIP = 2000;
+parameters.maxPIP = 5000;
 parameters.PIPperCl = 2;
 options.display = 1;
 parameters.dataset = dataset;

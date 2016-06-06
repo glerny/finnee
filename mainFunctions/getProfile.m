@@ -1,18 +1,18 @@
 function [profileOut, finneeStc] = getProfile(finneeStc, dataset, massInt, varargin)
 %% DESCRIPTION
 % 1. INTRODUCTION
-% GETPROFILE is used to generate a profile using a given m/z interval. 
+% GETPROFILE is used to generate a profile using a given m/z interval.
 % This function will update the finneeStc in case the
 % profile is to be save (optional. profileOut is a 2xm array that contain
-% the profile. This function work with profile or centroid spectrum, and 
-% extracted ions dataset. 
+% the profile. This function work with profile or centroid spectrum, and
+% extracted ions dataset.
 %
 % 2. PARAMETERS:
 %   .required. GETPROFILE requires at least 3 parameters
 %       finneeStc
 %           is the finnee structure that contain information about the run
 %           and link and indexation of the associated dat file. The
-%           strcuture should have been create by function such as 
+%           strcuture should have been create by function such as
 %           MZML2STRUCT
 %       dataset
 %           datasetis the indice to the targeted dataset (i.e. in
@@ -23,10 +23,10 @@ function [profileOut, finneeStc] = getProfile(finneeStc, dataset, massInt, varar
 %           Define the m/z interval to be used. It can be a single value
 %           (closest m/z value) or a 2x1 array [mzMin mzMax]
 %
-%   .optionals. VARARGIN describes the optional paramters.  
-%       'noFig' 
+%   .optionals. VARARGIN describes the optional paramters.
+%       'noFig'
 %           No figures displayed
-%       'indice'  
+%       'indice'
 %           Work only with 'profile spectrum' dataset. If indice is used,
 %           massInt is the indice in the mass axe.
 %
@@ -55,7 +55,7 @@ fidReadDat = fopen(finneeStc.path2dat, 'rb');
 
 axeX(:,1) = finneeStc.dataset{m}.axes.time.values;
 fmt = finneeStc.info.parameters.prec4mz;
-        
+
 % 1. Checking the data type
 switch finneeStc.dataset{m}.description.dataFormat
     case 'profile spectrum'
@@ -83,7 +83,7 @@ switch finneeStc.dataset{m}.description.dataFormat
             if options.indice
                 ind = parameters.mzMin;
             else
-                ind = findCloser( parameters.mzMin, refMZ)
+                ind = findCloser( parameters.mzMin, refMZ);
             end
             profileOut.title = ['Extracted ion profile ( m/z = ', ...
                 num2str(refMZ(ind),fmt),'); (',...
@@ -96,11 +96,14 @@ switch finneeStc.dataset{m}.description.dataFormat
         profileOut.data(:,2) = 0;
         
         %2.2. getting each MS spectra and caulcaulating the profile
+        h = waitbar(0,'Calculating profile, please wait');
         for ii = 1:length(axeX)
+            waitbar(ii/length(axeX));
+            
             index = finneeStc.dataset{m}.indexInDat(ii+1, :);
             fseek(fidReadDat, index(1), 'bof');
             
-             switch index(6)
+            switch index(6)
                 case 2
                     MS = ...
                         fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
@@ -112,7 +115,7 @@ switch finneeStc.dataset{m}.description.dataFormat
                 case 8
                     MS = ...
                         fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
-             end
+            end
             
             if parameters.mzMin ~=  parameters.mzMax
                 MS = MS(indMzStt:indMzEnd);
@@ -125,6 +128,8 @@ switch finneeStc.dataset{m}.description.dataFormat
                 profileOut.data(ii, 2) = sum(MS);
             end
         end
+        close(h)
+        
         
     case 'centroid spectrum'
         if parameters.mzMin ~=  parameters.mzMax
@@ -142,7 +147,9 @@ switch finneeStc.dataset{m}.description.dataFormat
         profileOut.data(:,2) = 0;
         
         %2.2. getting each MS spectra and caulcaulating the profile
+        h = waitbar(0,'Calculating profile, please wait');
         for ii = 1:length(axeX)
+            waitbar(ii/length(axeX));
             
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
@@ -160,7 +167,7 @@ switch finneeStc.dataset{m}.description.dataFormat
                     MS = ...
                         fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
             end
-             
+            
             ind2rem = MS(:,1) < parameters.mzMin |...
                 MS(:,1) > parameters.mzMax;
             MS(ind2rem, :) = [];
@@ -170,9 +177,11 @@ switch finneeStc.dataset{m}.description.dataFormat
                 profileOut.data(ii, 2) = sum(MS(:,2));
             end
         end
+        close(h)
+        
     case 'ionic profile'
-         profileOut.plotType = 'profile';
-         if parameters.mzMin ~=  parameters.mzMax
+        profileOut.plotType = 'profile';
+        if parameters.mzMin ~=  parameters.mzMax
             profileOut.title = ['Extracted ion profile ( m/z = ', ...
                 num2str( parameters.mzMin, fmt),':', ...
                 num2str(parameters.mzMax, fmt), '); (',...
@@ -186,11 +195,27 @@ switch finneeStc.dataset{m}.description.dataFormat
         profileOut.data = axeX;
         profileOut.data(:,2) = 0;
         %2.3 getting each PIP
+        h = waitbar(0,'Calculating profile, please wait');
         for ii = 1:length(finneeStc.dataset{m}.indexInDat(:,1))
+            
+            waitbar(ii/length(finneeStc.dataset{m}.indexInDat(:,1)));
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
-            PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-                index(3)], 'double');
+            
+             switch index(6)
+                case 2
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+             end
+             
             ind2rem = PIP(:,3) <  parameters.mzMin |...
                 PIP(:,3) > parameters.mzMax;
             PIP(ind2rem, :) = [];
@@ -198,6 +223,8 @@ switch finneeStc.dataset{m}.description.dataFormat
                 profileOut.data(PIP(:,1),2) = profileOut.data(PIP(:,1),2) + PIP(:,2);
             end
         end
+        close(h)
+        
     otherwise
         DIL
 end
@@ -207,6 +234,7 @@ profileOut.axes.axeX.label = finneeStc.dataset{m}.axes.time.label;
 profileOut.axes.axeX.unit = finneeStc.dataset{m}.axes.time.unit;
 profileOut.axes.axeY.label = finneeStc.dataset{m}.axes.intensity.label;
 profileOut.axes.axeY.unit = finneeStc.dataset{m}.axes.intensity.unit;
+profileOut.info = info;
 
 % 3. Plot if requested
 if options.display

@@ -32,6 +32,8 @@ function spectraOut = getSpectra(finneeStc, dataset, timeInt, varargin)
 %       'indice'  
 %           Work only with 'profile spectrum' and 'centroid spectrum'
 %           dataset. If indice is used, timeInt is the scan number.
+%       'reduced'
+%           Remove null values in the spectra to decrease size
 %
 % 3. EXAMPLES:
 %   spectraOut = getSpectra(finneeStc, 1, [10.1 10.5])
@@ -117,7 +119,16 @@ switch finneeStc.dataset{m}.description.dataFormat
                 % scan this is not entirely true as there are some small
                 % variation in the m/z values those seems small enough to
                 % be discarded
-           
+                
+        end
+        
+        if options.dtReduc
+            % Data reduction for higher speed
+            filterIn = true(length(spectraOut.data(:,1)), 1);
+            filterIn(2:end-1) = spectraOut.data(1:end-2,2) == 0 & ...
+                spectraOut.data(2:end-1,2) == 0 & ...
+                spectraOut.data(3:end,2) == 0;
+            spectraOut.data(filterIn, :) = [];
         end
         
     case 'centroid spectrum'
@@ -167,8 +178,21 @@ switch finneeStc.dataset{m}.description.dataFormat
         for ii = 1:length(finneeStc.dataset{m}.indexInDat(:,1))
             index = finneeStc.dataset{m}.indexInDat(ii, :);
             fseek(fidReadDat, index(1), 'bof');
-            PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-                index(3)], 'double');
+            
+            switch index(6)
+                case 2
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                    
+                case 4
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                    
+                case 8
+                    PIP = ...
+                        fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+            end
+            
             ind2rem = PIP(:,1) < indTimeStt | PIP(:,1) > indTimeEnd | ...
                 PIP(:,3) < parameters.mzMin | PIP(:,3) > parameters.mzMax;
             PIP(ind2rem, :) = [];
@@ -209,6 +233,8 @@ spectraOut.axes.axeX.label = finneeStc.dataset{m}.axes.mz.label;
 spectraOut.axes.axeX.unit = finneeStc.dataset{m}.axes.mz.unit;
 spectraOut.axes.axeY.label = finneeStc.dataset{m}.axes.intensity.label;
 spectraOut.axes.axeY.unit = finneeStc.dataset{m}.axes.intensity.unit;
+spectraOut.info = info;
+
 % 3. Plot if requested
 if options.display
     switch spectraOut.plotType
@@ -242,6 +268,7 @@ function [parameters, options] = ...
 
 options.display = 1;
 options.indice = 0;
+options.dtReduc = false;
 
 % 1.1. Check for obligatory parameters
 if narginIn < 3 % check the number of input parameters
@@ -286,6 +313,9 @@ if  narginIn > 3
                 SFi = SFi + 2;
             case 'noFig'
                 options.display = 0;
+                SFi = SFi + 1;
+            case 'reduced'
+                options.dtReduc = true;
                 SFi = SFi + 1;
             case 'indice'
                 options.indice = 1;

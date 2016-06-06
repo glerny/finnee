@@ -16,24 +16,12 @@ function indOut = findCloser(valorIn, vectorIn)
 %% COPYRIGHT
 % Copyright 2014-2015 G. Erny (guillaume.erny@finnee.com), FEUP, Porto, Portugal
 
-sTime = tic;
-info.type = 'Utility';
-info.subFunctionOf = {'getSpectra'};
-info.name = 'findCloser';
-info.matlabVersion = '8.2.0.701 (R2013b)';
-info.version = '20/02/2015_gle01';
-info.owner = 'G.Erny @ guillaume.erny@finnee.com';
-info.copyright = '';
-
 %% FUNCTION CORE
-indMin = find(vectorIn <= valorIn, 1, 'last');
-indMax = find(vectorIn >= valorIn, 1, 'first');
-if isempty(indMin)
-    indOut = indMax;
-elseif isempty(indMax)
-    indOut = indMin;
-elseif abs(vectorIn(indMin) - valorIn) <= abs(vectorIn(indMax) - valorIn)
-    indOut = indMin;
+
+if valorIn <= vectorIn(1)
+    indOut = 1;
+elseif valorIn >= vectorIn(end)
+    indOut = length(vectorIn);
 else
-    indOut = indMax;
+    [~, indOut] = min(abs(vectorIn - valorIn));
 end

@@ -40,6 +40,18 @@ function finneeStc = domzML2struct(varargin)
 
 %% CORE OF THE FUNCTION
 % 1. INITIALISATION
+
+v = version;
+switch v
+    case {'7.12.0.635 (R2011a)'} %tested version
+        info.function.runningVersion = 7;
+    case ('9.0.0.341360 (R2016a)') %tested version
+        info.function.runningVersion = 9;
+    otherwise
+        warning('MATLAB:version', 'Finnee has not been tested with this version of Matlab. If successful (or not) we will appreciate some feedback');
+        info.function.runningVersion = str2double(v(1:2));
+end
+        
 info.function.functionName = 'domzML2struct';
 info.function.description{1} = 'Main function';
 info.function.description{2} = 'Used to convert mzML datafiles to Matlab structures';
@@ -60,9 +72,8 @@ finneeStc.path2dat = fullfile(folderOut, [fileID, '.dat']);
 try
     fidRead = fopen(originalFile, 'r'); % original mzML file
     fidWriteDat = fopen(finneeStc.path2dat, 'wb'); % new file that will store data
-catch
-    error('myApp:argChk', ...
-        'Error while opening the files. Type help hyphMSdata2struct for more information')
+catch err
+    error(err)
 end
 if fidRead == -1 && fidWriteDat == -1 
     error('myApp:argChk', ...
@@ -481,7 +492,11 @@ fclose(fidWriteDat);
     function save2struc()
     % Save description of dataset
     finneeStc.dataset{1}.name = 'Original dataset';
-    finneeStc.dataset{1}.dateOfCreation = datetime;
+    if info.function.runningVersion <= 7;
+        finneeStc.dataset{1}.dateOfCreation = datestr(now);
+    else
+        finneeStc.dataset{1}.dateOfCreation = datetime;
+    end
     finneeStc.dataset{1}.info = info;
     finneeStc.dataset{1}.info.parameters = ...
         finneeStc.info.parameters;
@@ -509,7 +524,11 @@ fclose(fidWriteDat);
     % Record profiles
     % ** TICP
     finneeStc.dataset{1}.trace{1}.name = 'Total Ion Current Profile (dataset 1)';
-    finneeStc.dataset{1}.trace{1}.dateOfCreation = datetime;
+    if info.function.runningVersion <= 7;
+        finneeStc.dataset{1}.trace{1}.dateOfCreation = datestr(now);
+    else
+        finneeStc.dataset{1}.trace{1}.dateOfCreation = datetime;
+    end
     finneeStc.dataset{1}.trace{1}.code = 'TIP';
     finneeStc.dataset{1}.trace{1}.plotType = 'profile';
     finneeStc.dataset{1}.trace{1}.axeX.label = timeLabel;
@@ -526,8 +545,12 @@ fclose(fidWriteDat);
     
     % ** BPP
     finneeStc.dataset{1}.trace{2}.name = 'Base Peak Profile (dataset 1)';
-    finneeStc.dataset{1}.trace{2}.dateOfCreation = datetime;
-    finneeStc.dataset{1}.trace{1}.code = 'BPP';
+    if info.function.runningVersion <= 7;
+        finneeStc.dataset{1}.trace{2}.dateOfCreation = datestr(now);
+    else
+        finneeStc.dataset{1}.trace{2}.dateOfCreation = datetime;
+    end
+    finneeStc.dataset{1}.trace{2}.code = 'BPP';
     finneeStc.dataset{1}.trace{2}.plotType = 'profile';
     finneeStc.dataset{1}.trace{2}.axeX.label = timeLabel;
     finneeStc.dataset{1}.trace{2}.axeX.unit = timeUnit;
@@ -539,8 +562,12 @@ fclose(fidWriteDat);
     
     % ** mzBPP
     finneeStc.dataset{1}.trace{3}.name = 'm/z @ Base Peak (dataset 1)';
-    finneeStc.dataset{1}.trace{3}.dateOfCreation = datetime;
-    finneeStc.dataset{1}.trace{1}.code = 'mzBPP';
+    if info.function.runningVersion <= 7;
+        finneeStc.dataset{1}.trace{3}.dateOfCreation = datestr(now);
+    else
+        finneeStc.dataset{1}.trace{3}.dateOfCreation = datetime;
+    end
+    finneeStc.dataset{1}.trace{3}.code = 'mzBPP';
     finneeStc.dataset{1}.trace{3}.plotType = 'profile';
     finneeStc.dataset{1}.trace{3}.axeX.label = timeLabel;
     finneeStc.dataset{1}.trace{3}.axeX.unit = timeUnit;

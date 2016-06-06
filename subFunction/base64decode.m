@@ -27,8 +27,6 @@ function y = base64decode(x)
 %   E-mail:      pjacklam@online.no
 %   URL:         http://home.online.no/~pjacklam
 
-% check number of input arguments
-narginchk(1,1)
 %   remove non-base64 chars
 x = x (   ( 'A' <= x & x <= 'Z' ) ...
     | ( 'a' <= x & x <= 'z' ) ...

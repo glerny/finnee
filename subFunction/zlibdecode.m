@@ -9,17 +9,6 @@ function output = zlibdecode(input)
 %
 % See also zlibencode typecast
 
-narginchk(1,1);
-error(javachk('jvm'));
-if ischar(input)
-    warning('zlibdecode:inputTypeMismatch', ...
-        'Input is char, but treated as uint8.');
-    input = uint8(input);
-end
-if ~isa(input, 'int8') && ~isa(input, 'uint8')
-    error('Input must be either int8 or uint8.');
-end
-
 buffer = java.io.ByteArrayOutputStream();
 zlib = java.util.zip.InflaterOutputStream(buffer);
 zlib.write(input, 0, numel(input));

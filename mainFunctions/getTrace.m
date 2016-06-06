@@ -51,6 +51,7 @@ traceOut.data = ...
 traceOut.plotType = finneeStc.dataset{m}.trace{n}.plotType;
 traceOut.axes.axeX = finneeStc.dataset{m}.trace{n}.axeX;
 traceOut.axes.axeY = finneeStc.dataset{m}.trace{n}.axeY;
+traceOut.info = info;
 
 if options.display
     switch traceOut.plotType
@@ -113,7 +114,8 @@ if  narginIn > 2
 end
 
 % 1.3. Decifer address and check for errors
-list = strsplit(address, '@');
+
+list = regexp(address, '@','split');
 tgtDataset = str2double(list{2});
 tgtTrace =  str2double(list{1});
 % check for error

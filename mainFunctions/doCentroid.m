@@ -45,7 +45,7 @@ info.function.ownerContact = 'guillaume@fe.up.pt';
 % compulsory parameters
 
 m = parameters.dataset;
-
+v = finneeStc.info.function.runningVersion;
 
 % 2. CHECKING THE DATA TYPE
 switch finneeStc.dataset{m}.description.dataFormat
@@ -167,7 +167,11 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end+1}.name = ...
             ['''centroid spectrum'' dataset of the ''profile spectrum'' dataset ', ...
             num2str(m)];
-        finneeStc.dataset{end}.dateOfCreation = datetime;
+        if v <= 7;
+            finneeStc.dataset{end}.dateOfCreation = datestr(now);
+        else
+            finneeStc.dataset{end}.dateOfCreation = datetime;
+        end
         finneeStc.dataset{end}.info = info;
         finneeStc.dataset{end}.info.parameters = parameters;
         finneeStc.dataset{end}.info.errors = {};
@@ -204,7 +208,11 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{1}.name = ...
             ['Total Ion Current Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
+        if v <= 7;
+            finneeStc.dataset{end}.trace{1}.dateOfCreation = datestr(now);
+        else
+            finneeStc.dataset{end}.trace{1}.dateOfCreation = datetime;
+        end
         finneeStc.dataset{end}.trace{1}.code = 'TIP';
         finneeStc.dataset{end}.trace{1}.plotType = 'profile';
         finneeStc.dataset{end}.trace{1}.axeX.label = timeLabel;
@@ -219,8 +227,12 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{2}.name = ...
             ['Base Peak Profile (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
-        finneeStc.dataset{end}.trace{1}.code = 'BPP';
+        if v <= 7;
+            finneeStc.dataset{end}.trace{2}.dateOfCreation = datestr(now);
+        else
+            finneeStc.dataset{end}.trace{2}.dateOfCreation = datetime;
+        end
+        finneeStc.dataset{end}.trace{2}.code = 'BPP';
         finneeStc.dataset{end}.trace{2}.plotType = 'profile';
         finneeStc.dataset{end}.trace{2}.axeX.label = timeLabel;
         finneeStc.dataset{end}.trace{2}.axeX.unit = timeUnit;
@@ -234,8 +246,12 @@ save(fullfile(finneeStc.info.parameters.folderOut, ...
         finneeStc.dataset{end}.trace{3}.name = ...
             ['m/z @ Base Peak (dataset ', ...
             num2str(length(finneeStc.dataset)), ')'];
-        finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
-        finneeStc.dataset{end}.trace{1}.code = 'mzBPP';
+        if v <= 7;
+            finneeStc.dataset{end}.trace{3}.dateOfCreation = datestr(now);
+        else
+            finneeStc.dataset{end}.trace{3}.dateOfCreation = datetime;
+        end
+        finneeStc.dataset{end}.trace{3}.code = 'mzBPP';
         finneeStc.dataset{end}.trace{3}.plotType = 'profile';
         finneeStc.dataset{end}.trace{3}.axeX.label = timeLabel;
         finneeStc.dataset{end}.trace{3}.axeX.unit = timeUnit;

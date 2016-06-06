@@ -77,8 +77,8 @@ if isempty(targetStep), targetStep = ii ; end
 
 index = clusters.step{targetStep}.index2DotDat;
 fseek(fidReadDat, index(1), 'bof');
-data2load = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-    index(3)], 'double');
+data2load = fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), ...
+    index(3)], 'single');
 selClusters{length(data2load(:,1))} = {};
 for ii = 1:length(data2load(:,1))
     selClusters{ii} = nonzeros(data2load(ii,:));
@@ -101,8 +101,19 @@ for ii = 1:length(selClusters)
     for jj = 1:length(selClusters{ii})
         index = finneeStc.dataset{m}.indexInDat(selClusters{ii}(jj), :);
         fseek(fidReadDat, index(1), 'bof');
-        PIP = fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), ...
-            index(3)], 'double');
+        switch index(6)
+            case 2
+                PIP = ...
+                    fread(fidReadDat, [(index(2)-index(1))/(index(3)*2), index(3)], 'uint16');
+                
+            case 4
+                PIP = ...
+                    fread(fidReadDat, [(index(2)-index(1))/(index(3)*4), index(3)], 'single');
+                
+            case 8
+                PIP = ...
+                    fread(fidReadDat, [(index(2)-index(1))/(index(3)*8), index(3)], 'double');
+        end
         clustersOut.cluster{ii}.ionicProfile{jj} = PIP;
         sumPIPinCl(PIP(:,1)) = sumPIPinCl(PIP(:,1)) + PIP(:,2);
         if maxInt < max(PIP(:,2)), maxInt =  max(PIP(:,2)); end
@@ -137,7 +148,7 @@ intUnit = finneeStc.dataset{m}.axes.intensity.unit;
 
 clustersOut.trace{1}.title = 'Sum final profiles in clusters';
 clustersOut.trace{1}.data = [axeX sumPIP];
-clustersOut.trace{1}.dateOfCreation = datetime;
+% clustersOut.trace{1}.dateOfCreation = datetime;
 clustersOut.trace{1}.plotType = 'profile';
 clustersOut.trace{1}.axeX.label = timeLabel;
 clustersOut.trace{1}.axeX.unit = timeUnit;
@@ -147,7 +158,7 @@ clustersOut.trace{1}.axeY.unit = intUnit;
 clustersOut.trace{2}.title =['Sum profiles in clusters with intensity >'...
     num2str(minInt)];
 clustersOut.trace{2}.data = [axeX sumCluSIP];
-clustersOut.trace{2}.dateOfCreation = datetime;
+% clustersOut.trace{2}.dateOfCreation = datetime;
 clustersOut.trace{2}.plotType = 'profile';
 clustersOut.trace{2}.axeX.label = timeLabel;
 clustersOut.trace{2}.axeX.unit = timeUnit;
@@ -162,8 +173,7 @@ figure('units','normalized','outerposition',[0 0 1 1], 'Name', ... % this does m
     ['Clusters plots of ',finneeStc.info.parameters.fileID, ' @ ',...
     address, ' with HL = ', num2str(parameters.HL), ...
     ' and intenisty of clusters >= ', num2str(parameters.minIntensity)])
-
-subplot(5,1,1)
+sh1 = subplot(5,1,1);
 plot(axeX, sumPIP, 'k')
 hold on
 plot(axeX, sumCluSIP, 'r')
@@ -174,25 +184,35 @@ xlabel([timeLabel,' / ', timeUnit]);
 ylabel([intLabel,' / ', intUnit]);
 v1 = axis;
 
-subplot(5,1, 2:5) % CLUSTERS PLOT
+sh2 = subplot(5,1, 2:5); % CLUSTERS PLOT
 codeSize = int32(listI2plot3D/max(listI2plot3D)*(500) + 5);
 hold on
-scatter(listT2plot3D, listMZ2plot3D, ...
-    codeSize, 'k');
-title('Clusters Plot');
+hCP = scatter(listT2plot3D, listMZ2plot3D, codeSize, 'k');
+title('CLUSTERS PLOT - press a circle to see cluster''s profiles')
 xlabel([timeLabel,' / ', timeUnit]);
 ylabel([mzLabel,' / ', mzUnit]);
 v2 = axis;
 axis([v1(1) v1(2) v2(3) v2(4)])
 hold off
-
 clustersOut.plot.x.value = listT2plot3D;
 clustersOut.plot.x.label = [timeLabel,' / ', timeUnit];
 clustersOut.plot.y.value = listMZ2plot3D;
 clustersOut.plot.y.label = [mzLabel,' / ', mzUnit];
-clustersOut.plot.z.value = codeSize;
+clustersOut.plot.z.value = codeSize;  
+
+set(hCP, 'ButtonDownFcn', @getThisCluster)
         
 %% NESTED FUNCTIONS
+    function getThisCluster(src, evnt)
+        cp = get(gca, 'CurrentPoint');
+        XData = get(src, 'XData');
+        YData = get(src, 'YData');
+        ED = (abs(cp(1,1) - XData)/(max(XData)-min(XData))).^2+(abs(cp(1,2) - YData)/(max(YData)-min(YData))).^2;
+        [~, ind] = min(ED);
+        ic.Position(1) = XData(ind);
+        ic.Position(2) = YData(ind);
+        getCluster(clustersOut, ic);
+    end
 end
 
 %% SUB FUNCTIONS
@@ -224,7 +244,7 @@ parameters.minIntensity = minInt;
 parameters.HL = HL;
 
 % 1.3. Decifer address
-list = strsplit(address, '@');
+list = regexp(address, '@','split');
 tgtDataset = str2double(list{2});
 tgtHStr =  str2double(list{1});
 parameters.dataset = tgtDataset; 
